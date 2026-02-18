@@ -178,14 +178,14 @@ async def subscribe_to_opportunities():
     from app.main import broker
     from app.config import settings
 
-    async def handle_opportunity(event: Dict[str, Any]):
+    async def handle_opportunity(payload: Dict[str, Any]):
         try:
-            opp_data = event.get("payload")
-            if not opp_data:
+            # MemoryBroker passes the unwrapped payload directly (not {key, payload} envelope)
+            if not payload:
                 return
             
             # Unwrap if needed (Refinery sends model_dump())
-            await process_and_route_opportunity(opp_data)
+            await process_and_route_opportunity(payload)
             
         except Exception as e:
             logger.error("WebSocket handler failed", error=str(e))

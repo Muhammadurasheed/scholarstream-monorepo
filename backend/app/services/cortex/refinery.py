@@ -108,14 +108,14 @@ class RefineryService:
         
         return list(tags)
 
-    async def handle_raw_html_event(self, event: dict):
+    async def handle_raw_html_event(self, payload: dict):
         """
         Event Handler for 'cortex.raw.html' events.
-        Replaces the old EnrichmentWorker consumer loop.
+        NOTE: MemoryBroker passes the unwrapped payload directly (not the full event envelope).
+        The payload contains: url, title, html, crawled_at, source, intent, agent_type, mission_id
         """
-        key = event.get("key")
-        value = event.get("payload")
-        await self.process_raw_event(key, value)
+        key = payload.get("url", "unknown")
+        await self.process_raw_event(key, payload)
 
     async def _publish_verified(self, opp: OpportunitySchema):
         """Publish verified opportunity to the Event Bus"""
