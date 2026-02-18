@@ -5,7 +5,6 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from app.services.crawler_service import crawler_service
-from app.services.kafka_config import KafkaConfig, kafka_producer_manager
 from app.services.discovery_pulse import discovery_pulse
 import random
 import string

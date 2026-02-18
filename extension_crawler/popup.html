@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Sentinel Status</title>
+    <style>
+        body {
+            width: 200px;
+            padding: 10px;
+            font-family: sans-serif;
+            background: #0f172a;
+            color: white;
+        }
+
+        .status {
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        .dot {
+            height: 10px;
+            width: 10px;
+            background-color: #22c55e;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .red {
+            background-color: #ef4444;
+        }
+    </style>
+</head>
+
+<body>
+    <h3>👁️ Sentinel</h3>
+    <div class="status">
+        <span id="dot" class="dot red"></span>
+        <span id="text">Disconnected</span>
+    </div>
+    <script src="popup.js"></script>
+</body>
+
+</html>

@@ -5,7 +5,7 @@ import structlog
 from typing import List, Dict, Any, Optional
 import time
 
-from app.services.kafka_config import KafkaConfig, kafka_producer_manager
+
 
 logger = structlog.get_logger()
 
@@ -20,7 +20,7 @@ class UniversalCrawlerService:
     """
     
     def __init__(self):
-        self.kafka_initialized = kafka_producer_manager.initialize()
+        # self.kafka_initialized removed - using EventBroker
         self.browser = None
         self.playwright = None
         # Prevent concurrent initialization races (multiple scrapers booting at once)
@@ -307,22 +307,21 @@ class UniversalCrawlerService:
             "mission_id": mission_id
         }
         
-        if self.kafka_initialized:
-            success = kafka_producer_manager.publish_to_stream(
-                topic=KafkaConfig.TOPIC_RAW_HTML,
+        # Use Global Event Broker (Injected or Global)
+        from app.main import broker
+        from app.config import settings
+
+        try:
+            await broker.publish(
+                topic=settings.topic_raw_html,
                 key=url,
-                value=payload
+                payload=payload
             )
-            if success:
-                logger.info("Drone transmitted payload", url=url, size=len(html_content))
-            else:
-                logger.error("Transmission jammed (Kafka fail) - Engaging Heartbeat Fallback", url=url)
-                from app.services.cortex.refinery import refinery_service
-                await refinery_service.process_raw_event(key=url, value=payload) # Direct Heartbeat Injection
-        else:
-             logger.warning("Kafka offline - Engaging Heartbeat Fallback", url=url)
-             from app.services.cortex.refinery import refinery_service
-             await refinery_service.process_raw_event(key=url, value=payload) # Direct Heartbeat Injection
+            logger.info("Drone transmitted payload via EventBroker", url=url, size=len(html_content))
+        except Exception as e:
+            logger.error("EventBroker transmission failed", error=str(e))
+            # Fallback is now handled by the broker implementation or retry logic
+            # For now, we log and continue. The MemoryBroker is robust.
 
     def _extract_domain(self, url: str) -> str:
         from urllib.parse import urlparse

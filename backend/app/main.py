@@ -151,6 +151,11 @@ from app.routes import crawler
 app.include_router(crawler.router)
 
 
+# Initialize Event Broker (Global)
+from app.infrastructure.memory_broker import MemoryBroker
+# In a real app, we'd use a factory based on settings.event_broker_type
+broker = MemoryBroker()
+
 # Startup event
 @app.on_event("startup")
 async def startup_event():
@@ -161,36 +166,19 @@ async def startup_event():
         debug=settings.debug
     )
     
-    # Start background job scheduler
-    # from app.services.background_jobs import start_scheduler
-    # start_scheduler()
-    # logger.info("Background jobs DISABLED for Pivot")
-
-    # Ensure topics exist on Confluent
-    from app.services.kafka_config import kafka_producer_manager
-    kafka_producer_manager.config.ensure_topics_exist()
-
-    # Start UNIVERSAL CRAWLER SCHEDULER (Phase 4)
-    # DECOMMISSIONED in favor of Sentinel Patrol Loop for better stability
-    # try:
-    #     from app.services.crawler_scheduler import crawler_scheduler
-    #     asyncio.create_task(crawler_scheduler.start())
-    #     logger.info("Universal Crawler Scheduler initialized")
-    # except Exception as e:
-    #     logger.warning("Crawler Scheduler failed to start", error=str(e))
-
-    # Start AI REFINERY WORKER (Phase 4)
-    from app.services.enrichment_worker import enrichment_worker
-    asyncio.create_task(enrichment_worker.start())
-    logger.info("AI Refinery Worker initialized")
-
-    # Start Kafka consumer for real-time streaming (Non-Blocking)
-    try:
-        from app.routes.websocket import start_kafka_consumer_task
-        asyncio.create_task(start_kafka_consumer_task())
-        logger.info("Kafka consumer task scheduled (non-blocking)")
-    except Exception as e:
-        logger.warning("Kafka consumer failed to start, continuing without real-time updates", error=str(e))
+    # 1. Start Event Broker
+    await broker.start()
+    
+    # 2. Wire up Event Subscribers (The Wiring)
+    # Refinery: Listens for Raw HTML -> Enriches
+    from app.services.cortex.refinery import refinery_service
+    await broker.subscribe(settings.topic_raw_html, refinery_service.handle_raw_html_event)
+    
+    # WebSocket: Listens for Enriched Data -> Pushes to UI
+    from app.routes.websocket import subscribe_to_opportunities
+    await subscribe_to_opportunities()
+    
+    logger.info("Event Mesh sub-systems wired successfully")
 
     # === DEVPOST API SCRAPER: IMMEDIATE DATABASE POPULATION ===
     # Run DevPost API scraper on startup to immediately populate database
@@ -286,15 +274,8 @@ async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("Shutting down ScholarStream API")
     
-    # Stop background jobs
-    from app.services.crawler_scheduler import crawler_scheduler
-    await crawler_scheduler.stop()
-
-    from app.services.enrichment_worker import enrichment_worker
-    enrichment_worker.stop()
-    
-    # from app.services.background_jobs import stop_scheduler
-    # stop_scheduler()
+    # Stop Event Broker
+    await broker.stop()
     
     # Close scraper HTTP client
     from app.services.scraper_service import scraper_service

@@ -6,7 +6,7 @@ import json
 import uuid
 import structlog
 from datetime import datetime
-from app.services.kafka_config import KafkaConfig, kafka_producer_manager
+
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -18,7 +18,6 @@ class SentinelManager:
     def __init__(self):
         self.sentinels: Dict[str, WebSocket] = {}
         self.pending_jobs: Dict[str, asyncio.Future] = {}
-        self.kafka_initialized = kafka_producer_manager.initialize()
 
     async def connect(self, node_id: str, websocket: WebSocket):
         await websocket.accept()
@@ -73,8 +72,8 @@ class SentinelManager:
         if status == 200 and html:
             logger.info("Crawler Job Success", job_id=job_id, url=url, size=len(html))
             
-            # Stream to Kafka
-            if self.kafka_initialized:
+            # Stream to EventBroker
+            try:
                 payload = {
                     "url": url,
                     "html": html,
@@ -82,12 +81,17 @@ class SentinelManager:
                     "source": self._extract_domain(url),
                     "method": "extension_sentinel"
                 }
-                kafka_producer_manager.publish_to_stream(
-                    topic=KafkaConfig.RAW_HTML_TOPIC,
+
+                from app.main import broker
+                from app.config import settings
+
+                await broker.publish(
+                    topic=settings.topic_raw_html,
                     key=url,
-                    value=payload
+                    payload=payload
                 )
-                kafka_producer_manager.flush()
+            except Exception as e:
+                logger.error("Failed to publish crawl result to EventBroker", error=str(e))
         else:
             logger.warning("Crawler Job Failed", job_id=job_id, status=status, url=url)
 

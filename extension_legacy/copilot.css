@@ -1,0 +1,735 @@
+/* ScholarStream Copilot Styles */
+
+#scholarstream-copilot-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 999999;
+  cursor: pointer;
+}
+
+.copilot-fab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  color: white;
+  border-radius: 50px;
+  box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
+  transition: all 0.3s ease;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.copilot-fab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 30px rgba(124, 58, 237, 0.6);
+}
+
+.copilot-icon {
+  width: 24px;
+  height: 24px;
+  background: white;
+  color: #7c3aed;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+#scholarstream-copilot-panel {
+  position: fixed;
+  bottom: 90px;
+  right: 24px;
+  z-index: 999999;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.copilot-panel {
+  width: 380px;
+  max-height: 600px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.copilot-header {
+  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  color: white;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.copilot-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+  transition: background 0.2s;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.copilot-body {
+  padding: 20px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.profile-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.profile-summary.not-signed-in {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+}
+
+.profile-avatar {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.profile-name {
+  margin: 0;
+  font-weight: 600;
+  color: #111827;
+  font-size: 16px;
+}
+
+.profile-school {
+  margin: 4px 0 0 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.signin-link {
+  color: #7c3aed;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.signin-link:hover {
+  text-decoration: underline;
+}
+
+.opportunity-context {
+  padding: 12px 16px;
+  background: #faf5ff;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  border-left: 4px solid #7c3aed;
+}
+
+.opportunity-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.opportunity-badge.scholarship { background: #dbeafe; color: #1e40af; }
+.opportunity-badge.hackathon { background: #d1fae5; color: #065f46; }
+.opportunity-badge.bounty { background: #fef3c7; color: #92400e; }
+.opportunity-badge.competition { background: #fee2e2; color: #991b1b; }
+.opportunity-badge.grant { background: #e0e7ff; color: #3730a3; }
+
+.opportunity-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  line-height: 1.4;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.btn-primary,
+.btn-secondary {
+  width: 100%;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.btn-secondary:hover {
+  background: #e5e7eb;
+}
+
+.btn-large {
+  padding: 16px 24px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-small {
+  padding: 8px 12px;
+  font-size: 13px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: #f3f4f6;
+  color: #374151;
+  transition: all 0.2s;
+}
+
+.btn-small:hover {
+  background: #e5e7eb;
+}
+
+.field-mapping {
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.field-mapping h4 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+#field-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#field-list li {
+  padding: 8px 0;
+  font-size: 14px;
+  color: #6b7280;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+#field-list li:last-child {
+  border-bottom: none;
+}
+
+#field-list li.no-fields {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.copilot-footer {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #7c3aed;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px 0;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+/* Essay Modal Styles */
+#scholarstream-essay-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999999;
+}
+
+.essay-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.essay-modal {
+  width: 100%;
+  max-width: 640px;
+  max-height: 90vh;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  animation: modalSlideUp 0.3s ease;
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.essay-modal-header {
+  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  color: white;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.essay-modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.essay-modal-body {
+  padding: 24px;
+  max-height: calc(90vh - 80px);
+  overflow-y: auto;
+}
+
+.essay-prompt-section {
+  margin-bottom: 20px;
+}
+
+.essay-prompt-section label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.essay-prompt-section textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 14px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 15px;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.essay-prompt-section textarea:focus {
+  outline: none;
+  border-color: #7c3aed;
+}
+
+.essay-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.option-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.option-group input,
+.option-group select {
+  padding: 10px 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: white;
+  transition: border-color 0.2s;
+}
+
+.option-group input:focus,
+.option-group select:focus {
+  outline: none;
+  border-color: #7c3aed;
+}
+
+.humanize-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border-radius: 12px;
+  margin-bottom: 20px;
+  border-left: 4px solid #10b981;
+}
+
+.notice-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.humanize-notice p {
+  margin: 0;
+  font-size: 13px;
+  color: #065f46;
+  line-height: 1.5;
+}
+
+.essay-output-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 2px solid #e5e7eb;
+}
+
+.output-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.output-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.output-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.essay-output {
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 12px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #374151;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.word-count {
+  margin-top: 12px;
+  text-align: right;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.essay-tips-section {
+  margin-top: 24px;
+  padding: 16px;
+  background: #fffbeb;
+  border-radius: 12px;
+  border-left: 4px solid #f59e0b;
+}
+
+.essay-tips-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+#essay-tips-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+#essay-tips-list li {
+  font-size: 14px;
+  color: #78350f;
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+
+/* Research Panel Styles */
+#scholarstream-research-panel {
+  position: fixed;
+  bottom: 90px;
+  right: 400px;
+  z-index: 999998;
+  animation: slideUp 0.3s ease;
+}
+
+.research-panel {
+  width: 340px;
+  max-height: 500px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.research-header {
+  background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+  color: white;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.research-header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.research-body {
+  padding: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #6b7280;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.research-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.research-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.theme-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.theme-tag {
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  color: #5b21b6;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tips-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.tips-list li {
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.insight-text {
+  margin: 0;
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.6;
+  font-style: italic;
+  padding: 12px;
+  background: #f3f4f6;
+  border-radius: 8px;
+}
+
+.research-footer {
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.source-note {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.error-state {
+  text-align: center;
+  padding: 30px 20px;
+  color: #6b7280;
+}
+
+/* Toast Styles */
+.scholarstream-toast {
+  position: fixed;
+  bottom: 100px;
+  right: 24px;
+  z-index: 99999999;
+  padding: 16px 24px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.3s ease;
+}
+
+.scholarstream-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast-success {
+  border-left: 4px solid #10b981;
+}
+
+.toast-error {
+  border-left: 4px solid #ef4444;
+}
+
+.toast-info {
+  border-left: 4px solid #3b82f6;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .copilot-panel {
+    width: calc(100vw - 48px);
+    max-width: 360px;
+  }
+  
+  .essay-modal {
+    max-width: calc(100vw - 40px);
+    margin: 20px;
+  }
+  
+  .essay-options {
+    grid-template-columns: 1fr;
+  }
+  
+  #scholarstream-research-panel {
+    right: 24px;
+    bottom: 160px;
+  }
+  
+  .research-panel {
+    width: calc(100vw - 48px);
+    max-width: 340px;
+  }
+}

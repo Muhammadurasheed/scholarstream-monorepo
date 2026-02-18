@@ -1,0 +1,65 @@
+# FastAPI Backend Dependencies for ScholarStream
+
+# Core Framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+websockets==10.4
+gunicorn==21.2.0
+python-multipart==0.0.17
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Firebase Integration
+firebase-admin==6.6.0
+google-cloud-firestore==2.19.0
+
+# Google Gemini AI
+google-generativeai==0.8.3
+
+# Web Scraping & HTTP
+httpx==0.28.1
+beautifulsoup4==4.12.3
+lxml==5.3.0
+selenium==4.27.1
+requests==2.32.3
+playwright>=1.49.0
+playwright-stealth==1.0.6
+
+# Task Scheduling (for background jobs)
+apscheduler==3.10.4
+
+
+
+
+# Upstash Redis (Serverless Redis via HTTP)
+upstash-redis==0.15.0
+
+# Cloudinary (File Storage)
+cloudinary==1.41.0
+
+# Data Processing
+python-dateutil==2.9.0
+pytz==2024.2
+
+# Security & Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dotenv==1.0.1
+
+# Monitoring & Logging
+structlog==24.4.0
+
+# Rate Limiting
+slowapi==0.1.9
+
+# CORS & Middleware
+fastapi-cors==0.0.6
+
+# Testing (optional but recommended)
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.1
+
+# Document Parsing
+PyPDF2==3.0.1
+python-docx==1.1.2

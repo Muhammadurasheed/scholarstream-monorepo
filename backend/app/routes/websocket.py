@@ -1,19 +1,19 @@
 """
 WebSocket Endpoint for Real-Time Opportunity Streaming
-Consumes enriched opportunities from Confluent Kafka and pushes matches to connected clients
+Consumes enriched opportunities from EventBroker and pushes matches to connected clients
 """
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from typing import Dict, List, Optional, Any
 import json
 import asyncio
 import structlog
-from confluent_kafka import Consumer, KafkaError, KafkaException
+
 from firebase_admin import auth
 from datetime import datetime
 
 from app.database import get_user_profile, FirebaseDB
 from app.services.personalization_engine import PersonalizationEngine
-from app.services.kafka_config import KafkaConfig
+
 from app.models import (
     Scholarship, ScholarshipEligibility, ScholarshipRequirements
 )
@@ -110,110 +110,88 @@ async def verify_firebase_token(token: str) -> Optional[str]:
         return None
 
 
-async def consume_kafka_stream():
+async def process_and_route_opportunity(final_data: Dict):
     """
-    Background task that consumes enriched opportunities from Kafka
-    and pushes matching opportunities to connected users
+    Process enriched opportunity and route to connected clients.
+    Moved out of consume_kafka_stream for reuse.
     """
-    kafka_config = KafkaConfig()
-
-    if not kafka_config.enabled:
-        logger.warning("Kafka streaming disabled - WebSocket will not receive real-time updates")
-        return
-
-    consumer_config = kafka_config.get_consumer_config(group_id='scholarstream-websocket-consumers-v1')
-    consumer = Consumer(consumer_config)
-
-    # Subscribing to the new Refinery Output
-    consumer.subscribe([KafkaConfig.TOPIC_OPPORTUNITY_ENRICHED])
-
-    logger.info("Kafka Lifeline Consumer Started", topic=KafkaConfig.TOPIC_OPPORTUNITY_ENRICHED)
-
     try:
-        while True:
-            # Run blocking poll in thread to avoid freezing event loop
-            msg = await asyncio.to_thread(consumer.poll, 1.0)
+        # Convert to Scholarship Model
+        scholarship = convert_to_scholarship(final_data)
 
-            if msg is None:
+        if not scholarship:
+            return
+
+        # Start Personalization Engine (scoring)
+        # We need to fetch all active user profiles to match against
+        active_user_ids = manager.get_all_user_ids()
+
+        if not active_user_ids:
+            logger.info("No active users to match against", opportunity=scholarship.title)
+            return
+
+        # Persist to Firestore (Source of Truth)
+        # Note: Refinery already does a fallback save, but we save here to be sure
+        # if the flow came from a different source.
+        # await firebase_db.save_scholarship(scholarship) 
+
+        # Match against active users
+        match_count = 0
+        for user_id in active_user_ids:
+            user_profile_data = manager.user_profiles.get(user_id)
+            if not user_profile_data:
                 continue
 
-            if msg.error():
-                if msg.error().code() == KafkaError._PARTITION_EOF:
-                    logger.debug("Reached end of partition")
-                else:
-                    # Exponential Backoff for Connection Errors
-                    logger.error("Kafka error", error=str(msg.error()))
-                    await asyncio.sleep(5.0) # Sleep to prevent log spam
-                continue
+            # Calculate Match Score
+            score = personalization_engine.calculate_match_score(scholarship, user_profile_data)
 
-            try:
-                raw_value = msg.value().decode('utf-8')
-                # Try to parse the initial message
-                try:
-                    raw_message = json.loads(raw_value)
-                except json.JSONDecodeError:
-                    logger.error("Skipping non-JSON Kafka message", raw=raw_value[:100])
-                    consumer.commit(asynchronous=False) # Skip poison pill
-                    continue
-
-                # FIX: Recursive Unwrapping (The "Matryoshka" Unwrap)
-                # Sometimes data is double-encoded JSON strings inside JSON
-                final_data = raw_message
+            if score.score >= 0.6: # configurable threshold
+                # Send "New Opportunity" Notification
+                await manager.send_personal_message(user_id, {
+                    'type': 'new_opportunity_match',
+                    'opportunity': scholarship.model_dump(),
+                    'score': score.score,
+                    'reasons': score.match_reasons,
+                    'timestamp': datetime.utcnow().isoformat()
+                })
+                match_count += 1
                 
-                # If wrapped in 'enriched_data' envelope from Refinery
-                if isinstance(final_data, dict) and 'enriched_data' in final_data:
-                    final_data = final_data['enriched_data']
-                    # Use source metadata if available
-                    if isinstance(raw_message.get('source'), dict) and isinstance(final_data, dict):
-                         final_data.setdefault('source_metadata', raw_message['source'])
+                # Persist match to user's history
+                await firebase_db.add_user_match(user_id, scholarship.id)
 
-                # Unwrap string layers if necessary
-                max_depth = 4
-                for _ in range(max_depth):
-                    if isinstance(final_data, str):
-                        try:
-                            final_data = json.loads(final_data)
-                        except json.JSONDecodeError:
-                            break # It's just a string, stop unwrapping
-                    else:
-                        break
-                
-                # Normalization Layer: Heal Schema Mismatches
-                final_data = normalize_opportunity(final_data)
+        logger.info(
+            "Opportunity routed",
+            title=scholarship.title,
+            matched_users=match_count,
+            total_active=len(active_user_ids)
+        )
 
-                # CRITICAL: Validate that enriched_opportunity is actually a dictionary
-                if not isinstance(final_data, dict):
-                    logger.warning(
-                        "Skipping malformed opportunity",
-                        reason="Not a dictionary after normalization",
-                        type=type(final_data).__name__,
-                        preview=str(final_data)[:100]
-                    )
-                    consumer.commit(asynchronous=False) # Skip poison pill
-                    continue
+    except Exception as e:
+        logger.error("Routing failed", error=str(e))
 
-                logger.info(
-                    "Received enriched opportunity",
-                    opportunity_name=final_data.get('name', final_data.get('title', 'Unknown')),
-                    source=final_data.get('source', 'unknown')
-                )
 
-                # Process
-                await process_and_route_opportunity(final_data)
+async def subscribe_to_opportunities():
+    """
+    Subscribe to the EventBroker for enriched opportunities.
+    This replaces the Kafka consumer loop.
+    """
+    from app.main import broker
+    from app.config import settings
 
-                # Commit ONLY after successful processing (or explicit skip above)
-                consumer.commit(asynchronous=False)
+    async def handle_opportunity(event: Dict[str, Any]):
+        try:
+            opp_data = event.get("payload")
+            if not opp_data:
+                return
+            
+            # Unwrap if needed (Refinery sends model_dump())
+            await process_and_route_opportunity(opp_data)
+            
+        except Exception as e:
+            logger.error("WebSocket handler failed", error=str(e))
 
-            except Exception as e:
-                # Catch-all for processing errors
-                logger.error("Error processing opportunity", error=str(e), traceback=True)
-                consumer.commit(asynchronous=False)
-
-    except KafkaException as e:
-        logger.error("Kafka consumer error", error=str(e))
-    finally:
-        consumer.close()
-        logger.info("Kafka consumer closed")
+    await broker.subscribe(settings.topic_enriched_opportunity, handle_opportunity)
+    logger.info("WebSocket Service subscribed to EventBroker", topic=settings.topic_enriched_opportunity)
 
 
 def normalize_opportunity(data: Any) -> Dict:
@@ -617,7 +595,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str = ""):
 
 
 
-async def start_kafka_consumer_task():
-    """Start background Kafka consumer task"""
-    asyncio.create_task(consume_kafka_stream())
-    logger.info("Kafka consumer background task started")
+
+# Background task starter removed (Legacy Kafka)
+

@@ -3,7 +3,7 @@ import structlog
 import json
 from datetime import datetime
 from typing import Optional, List
-from app.services.kafka_config import KafkaConfig, kafka_producer_manager
+
 from app.services.cortex.reader_llm import reader_llm
 from app.models import OpportunitySchema
 from app.config import settings
@@ -108,26 +108,39 @@ class RefineryService:
         
         return list(tags)
 
+    async def handle_raw_html_event(self, event: dict):
+        """
+        Event Handler for 'cortex.raw.html' events.
+        Replaces the old EnrichmentWorker consumer loop.
+        """
+        key = event.get("key")
+        value = event.get("payload")
+        await self.process_raw_event(key, value)
+
     async def _publish_verified(self, opp: OpportunitySchema):
-        # Fallback Strategy: If Kafka is down, save directly to DB (The Heartbeat)
-        success = kafka_producer_manager.publish_to_stream(
-            topic=KafkaConfig.TOPIC_OPPORTUNITY_ENRICHED,
-            key=opp.id, # Hash ID
-            value=opp.model_dump() # Use model_dump() for Pydantic v2 consistency
-        )
+        """Publish verified opportunity to the Event Bus"""
+        # Publish to Event Bus
+        from app.main import broker
+        from app.config import settings
         
-        if success:
-            logger.info("Verified Opportunity Published to Stream", title=opp.title, tags=opp.geo_tags)
-        else:
-            logger.warning("Kafka Stream Failed - Engaging Heartbeat Fallback", title=opp.title)
+        try:
+            await broker.publish(
+                topic=settings.topic_enriched_opportunity,
+                key=opp.id,
+                payload=opp.model_dump()
+            )
+            logger.info("Verified Opportunity Published to EventBroker", title=opp.title)
+        except Exception as e:
+            logger.error("EventBroker Publish Failed", error=str(e))
+            # Fallback to direct DB save if broker fails (though MemoryBroker shouldn't fail)
             await self._persist_fallback(opp)
 
     async def _persist_fallback(self, opp: OpportunitySchema):
-        """Direct-to-Database Fallback (When Kafka is broken)"""
+        """Direct-to-Database Fallback"""
         try:
             await db.save_scholarship(opp)
-            logger.info("Heartbeat Fallback: Saved to DB directly", title=opp.title)
+            logger.info("Fallback: Saved to DB directly", title=opp.title)
         except Exception as e:
-            logger.error("Heartbeat Fallback Failed", error=str(e))
+            logger.error("Fallback Save Failed", error=str(e))
 
 refinery_service = RefineryService()

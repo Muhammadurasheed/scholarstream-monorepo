@@ -1,0 +1,13 @@
+@echo off
+echo 🔧 Fixing Frontend Native Binding Issue...
+echo.
+echo Step 1: Cleaning old dependencies...
+if exist node_modules rmdir /s /q node_modules
+if exist package-lock.json del package-lock.json
+echo ✅ Cleaned
+echo.
+echo Step 2: Reinstalling with force flag...
+call npm install --force
+echo.
+echo Step 3: Starting development server...
+call npm run dev

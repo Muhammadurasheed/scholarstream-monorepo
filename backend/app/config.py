@@ -56,13 +56,12 @@ class Settings(BaseSettings):
     cloudinary_api_key: Optional[str] = Field(default=None, env="CLOUDINARY_API_KEY")
     cloudinary_api_secret: Optional[str] = Field(default=None, env="CLOUDINARY_API_SECRET")
     
-    # Confluent Kafka Configuration
-    confluent_bootstrap_servers: str = Field(default="", env="CONFLUENT_BOOTSTRAP_SERVERS")
-    confluent_api_key: str = Field(default="", env="CONFLUENT_API_KEY")
-    confluent_api_secret: str = Field(default="", env="CONFLUENT_API_SECRET")
-    kafka_raw_topic: str = Field(default="raw-opportunities-stream", env="KAFKA_RAW_TOPIC")
-    kafka_enriched_topic: str = Field(default="enriched-opportunities-stream", env="KAFKA_ENRICHED_TOPIC")
-    kafka_consumer_group_id: str = Field(default="scholarstream-websocket-consumer", env="KAFKA_CONSUMER_GROUP_ID")
+    # Event Broker Configuration
+    event_broker_type: str = Field(default="memory", env="EVENT_BROKER_TYPE")
+    
+    # Topic Names (Preserved for internal routing)
+    topic_raw_html: str = Field(default="cortex.raw.html", env="TOPIC_RAW_HTML")
+    topic_enriched_opportunity: str = Field(default="opportunity.enriched", env="TOPIC_ENRICHED_OPPORTUNITY")
     
     # Flink Configuration
     flink_app_name: str = Field(default="scholarstream-cortex", env="FLINK_APP_NAME")

@@ -15,7 +15,7 @@ from playwright.async_api import async_playwright, Page, Browser
 from app.database import db
 from app.models import Scholarship
 from app.services.flink_processor import generate_opportunity_id
-from app.services.kafka_config import KafkaConfig, kafka_producer_manager
+
 
 logger = structlog.get_logger()
 
@@ -332,17 +332,8 @@ class DoraHacksDeepScraper:
                         except Exception as db_err:
                             logger.error(f"Failed direct DB save for {url}: {db_err}")
 
-                        # Still publish to Kafka stream for other workers (e.g. vectorization)
-                        kafka_producer_manager.publish_to_stream(
-                            topic=KafkaConfig.TOPIC_RAW_HTML,
-                            key=url,
-                            value={
-                                "url": url,
-                                "html": f"<opportunity>{opportunity}</opportunity>",  # Structured data
-                                "source": "dorahacks_deep",
-                                "extracted_data": opportunity,  # Direct pass-through
-                            }
-                        )
+                        # Kafka publishing removed - we save directly to DB
+                        pass
                 except Exception as e:
                     logger.error(f"Failed to extract from {url}: {str(e).encode(sys.stdout.encoding, errors='replace').decode(sys.stdout.encoding)}")
                 
