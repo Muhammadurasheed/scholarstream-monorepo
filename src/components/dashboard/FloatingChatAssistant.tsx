@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Sparkles, Loader2, Maximize2, Minimize2, Bookmark, ExternalLink, ArrowRight, ChevronDown, ChevronUp, Brain } from 'lucide-react';
+import { MessageCircle, X, Send, Sparkles, Loader2, Maximize2, Minimize2, Minus, Bookmark, ExternalLink, ArrowRight, ChevronDown, ChevronUp, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -153,10 +153,12 @@ export const FloatingChatAssistant = () => {
       const assistantMessage: Message = {
         role: 'assistant',
         content: data.message,
-        thinkingProcess: data.thinking_process || '',  // V2: Separate field
+        thinkingProcess: data.thinking_process || '',
         opportunities: data.opportunities || [],
         actions: data.actions || buildDefaultActions(data.opportunities),
-        suggestions: data.suggestions || buildDefaultSuggestions(messageText),
+        suggestions: data.suggestions && data.suggestions.length > 0
+          ? data.suggestions
+          : buildDefaultSuggestions(messageText),
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -284,20 +286,42 @@ export const FloatingChatAssistant = () => {
             <p className="text-xs text-muted-foreground">Your opportunity finder</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsOpen(false)}
+            className="text-muted-foreground hover:text-foreground h-8 w-8"
+            title="Minimize"
+          >
+            <Minus className="h-4 w-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground h-8 w-8"
+            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
           >
             {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setIsOpen(false)}
-            className="text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              setIsOpen(false);
+              setMessages([{
+                role: 'assistant',
+                content: "Hi! I'm your ScholarStream AI assistant. I can help you find scholarships, hackathons, bounties, and more. What are you looking for?",
+                suggestions: [
+                  'Find urgent opportunities',
+                  'Scholarships for my major',
+                  'High-value opportunities',
+                ],
+              }]);
+            }}
+            className="text-muted-foreground hover:text-destructive h-8 w-8"
+            title="Close and clear chat"
           >
             <X className="h-4 w-4" />
           </Button>

@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any, List
 from app.config import settings
 from app.models import OpportunitySchema
 from app.utils.json_utils import robust_json_loads
+from app.utils.rate_limiter import gemini_rate_limiter
 import json
 import asyncio
 import re
@@ -99,14 +100,10 @@ class ReaderLLM:
         """
 
         try:
-            model = genai.GenerativeModel(self.MODEL_NAME)
-            response = await model.generate_content_async(
-                prompt, 
-                generation_config={"response_mime_type": "application/json"}
+            # Rate-limited Gemini call with automatic retry on 429
+            raw_response = await gemini_rate_limiter.execute(
+                self._call_gemini, prompt
             )
-            
-            # Parse JSON response
-            raw_response = response.text.strip()
             
             # Handle potential JSON issues
             if raw_response.startswith("```"):
@@ -166,6 +163,18 @@ class ReaderLLM:
         except Exception as e:
             logger.error("Reader LLM extraction failed", url=source_url, error=str(e))
             return []
+
+    async def _call_gemini(self, prompt: str) -> str:
+        """
+        Raw Gemini API call — isolated so the rate limiter can wrap it.
+        Raises on error (including 429) so the limiter can retry.
+        """
+        model = genai.GenerativeModel(self.MODEL_NAME)
+        response = await model.generate_content_async(
+            prompt, 
+            generation_config={"response_mime_type": "application/json"}
+        )
+        return response.text.strip()
 
     def _detect_platform(self, url: str) -> str:
         """Detect platform for specialized parsing hints"""

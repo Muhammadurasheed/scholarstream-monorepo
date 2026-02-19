@@ -86,15 +86,41 @@ class Sentinel:
     ]
 
     async def patrol(self):
-        """Deploy Hunter Drones to patrol targets"""
+        """
+        Deploy Hunter Drones to patrol targets.
+        Uses batched, staggered execution to prevent 429 rate limits.
+        """
         mission_id = "patrol_" + "".join(random.choices(string.ascii_lowercase + string.digits, k=6))
         logger.info("Sentinel deploying Hunter Drones", target_count=len(self.TARGETS), mission_id=mission_id)
         
         discovery_pulse.announce_mission(mission_id, "Target Selection", "active")
         
         try:
-            # Delegate to the robust Universal Crawler (Playwright)
-            await crawler_service.crawl_and_stream(self.TARGETS, intent="patrol", mission_id=mission_id)
+            # Staggered patrol: batch targets to avoid overwhelming Gemini
+            BATCH_SIZE = 5
+            INTER_BATCH_DELAY = 15  # seconds between batches
+            INTRA_BATCH_DELAY = 3   # seconds between URLs in a batch
+            
+            for i in range(0, len(self.TARGETS), BATCH_SIZE):
+                batch = self.TARGETS[i:i + BATCH_SIZE]
+                batch_num = (i // BATCH_SIZE) + 1
+                total_batches = (len(self.TARGETS) + BATCH_SIZE - 1) // BATCH_SIZE
+                
+                logger.info(
+                    f"Sentinel patrol batch {batch_num}/{total_batches}",
+                    urls=[u.split('//')[-1][:40] for u in batch],
+                    mission_id=mission_id,
+                )
+                
+                # Crawl batch with staggered starts
+                for url in batch:
+                    await crawler_service.crawl_and_stream([url], intent="patrol", mission_id=mission_id)
+                    await asyncio.sleep(INTRA_BATCH_DELAY)
+                
+                # Pause between batches for rate limit breathing room
+                if i + BATCH_SIZE < len(self.TARGETS):
+                    await asyncio.sleep(INTER_BATCH_DELAY)
+            
             discovery_pulse.complete_mission(mission_id, found_count=len(self.TARGETS))
         except Exception as e:
             logger.error("Sentinel patrol mission failed", error=str(e))

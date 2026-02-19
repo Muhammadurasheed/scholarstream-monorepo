@@ -18,6 +18,7 @@ except ImportError:
     Redis = None
 
 from app.config import settings
+from app.utils.rate_limiter import gemini_rate_limiter
 from app.models import (
     ScrapedScholarship,
     UserProfile,
@@ -138,18 +139,17 @@ class GeminiAIService:
             raise e
 
     async def generate_content_async(self, prompt: str) -> Any:
-        """Async wrapper for generate_content"""
+        """Async Gemini call with adaptive rate limiting and retry on 429."""
         if not self._check_rate_limit():
             raise Exception("Rate limit exceeded")
         
-        try:
-            # Use run_in_executor or the library's async method if available
-            # Gemini 1.5 library has generate_content_async
-            response = await self.model.generate_content_async(prompt)
-            return response.text
-        except Exception as e:
-            logger.error("Gemini async generation failed", error=str(e))
-            raise e
+        # Route through the global adaptive rate limiter for retry + backoff
+        return await gemini_rate_limiter.execute(self._raw_gemini_call, prompt)
+
+    async def _raw_gemini_call(self, prompt: str) -> str:
+        """Raw Gemini API call — isolated for rate limiter wrapping."""
+        response = await self.model.generate_content_async(prompt)
+        return response.text
     
     async def enrich_scholarship(
         self,
