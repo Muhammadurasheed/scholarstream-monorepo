@@ -177,11 +177,23 @@ class Scout:
         
         discovery_pulse.announce_mission(mission_id, f"Searching: {query}", "active")
         
-        # 1. Generate Search URL (DuckDuckGo or Google)
-        search_urls = [
-            f"https://duckduckgo.com/?q={query.replace(' ', '+')}",
-            f"https://www.google.com/search?q={query.replace(' ', '+')}"
-        ]
+        # 1. FAANG-Grade Query Expansion (Dorks)
+        def generate_dorks(q: str):
+            q_clean = q.replace(' ', '+')
+            return [
+                f"https://duckduckgo.com/?q={q_clean}+2026",
+                f"https://www.google.com/search?q={q_clean}+2026",
+                f"https://www.bing.com/search?q={q_clean}+2026",
+                f"https://www.google.com/search?q=site:devpost.com+{q_clean}",
+                f"https://www.google.com/search?q=site:mlh.io+{q_clean}",
+                f"https://www.google.com/search?q=site:dorahacks.io+{q_clean}",
+                f"https://www.google.com/search?q=site:devfolio.co+{q_clean}",
+                f"https://www.google.com/search?q=site:lablab.ai+{q_clean}",
+                f"https://www.google.com/search?q=site:hackquest.io+{q_clean}",
+                f"https://www.google.com/search?q=site:taikai.network+{q_clean}"
+            ]
+        
+        search_urls = generate_dorks(query)
         
         # 2. Dispatch Drones
         # Note: crawl_and_stream handles browser context and stealth

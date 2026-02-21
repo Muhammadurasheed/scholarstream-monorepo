@@ -37,9 +37,37 @@ class GeminiAIService:
     """Google Gemini AI integration for scholarship processing"""
     
     def __init__(self):
-        """Initialize Gemini AI with Upstash Redis support"""
-        genai.configure(api_key=settings.gemini_api_key)
-        self.model = genai.GenerativeModel(settings.gemini_model)
+        """Initialize Gemini AI with Upstash Redis support and Vertex AI/API Key fallback"""
+        # Try initializing Vertex AI first (Enterprise/Production path)
+        self.use_vertex = False
+        try:
+            import vertexai
+            from vertexai.generative_models import GenerativeModel
+            import google.auth
+            from google.auth.exceptions import DefaultCredentialsError
+
+            # STRICT CHECK: Only use Vertex if we have actual Google Cloud credentials (ADC)
+            # attempting to use Vertex SDK with just an API key often fails or warns about gRPC
+            try:
+                credentials, project = google.auth.default()
+                vertexai.init(project=project, location="us-central1")
+                self.model = GenerativeModel(settings.gemini_model)
+                self.use_vertex = True
+                logger.info("Vertex AI initialized successfully", mode="enterprise_adc")
+            except DefaultCredentialsError:
+                logger.warning("No Google Cloud ADC found. Vertex AI SDK skipped. Falling back to Standard SDK.")
+                raise Exception("No ADC")
+
+        except Exception as e:
+            logger.warning(f"Vertex AI initialization skipped: {e}. Falling back to API Key.")
+            
+            if not settings.gemini_api_key:
+                logger.error("No Vertex AI credentials AND no GEMINI_API_KEY found.")
+                raise Exception("Missing AI credentials")
+
+            genai.configure(api_key=settings.gemini_api_key)
+            self.model = genai.GenerativeModel(settings.gemini_model)
+            logger.info("Gemini API initialized successfully", mode="standard_apikey")
         
         # Initialize Upstash Redis for rate limiting and caching
         self.redis_client = None

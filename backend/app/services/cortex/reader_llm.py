@@ -24,7 +24,25 @@ class ReaderLLM:
     Optimized for Gemini Flash (Fast/Cheap).
     """
     
-    MODEL_NAME = settings.gemini_model or "gemini-1.5-flash"  # Use configured model
+    MODEL_NAME = settings.gemini_model or "gemini-1.5-flash"
+
+    def __init__(self):
+        self.use_vertex = False
+        try:
+            import vertexai
+            from vertexai.generative_models import GenerativeModel
+            vertexai.init()
+            self.model = GenerativeModel(self.MODEL_NAME)
+            self.use_vertex = True
+            logger.info("Vertex AI initialized for ReaderLLM", mode="enterprise")
+        except Exception:
+            logger.warning("Vertex AI initialization failed for ReaderLLM. Falling back to API Key.")
+            if settings.gemini_api_key:
+                genai.configure(api_key=settings.gemini_api_key)
+                self.model = genai.GenerativeModel(self.MODEL_NAME)
+            else:
+                logger.warning("Gemini API key not configured for ReaderLLM")
+                self.model = None
 
     async def parse_opportunity(self, raw_text: str, source_url: str) -> Optional[OpportunitySchema]:
         """
@@ -54,8 +72,13 @@ class ReaderLLM:
         # Detect platform for specialized parsing
         platform_hint = self._detect_platform(source_url)
 
+        # Contextual timescale for accurate extraction
+        from datetime import datetime
+        current_date = datetime.now().strftime("%Y-%m-%d")
+
         prompt = f"""
         You are a Data Extraction Specialist for {platform_hint}.
+        Today's Date: {current_date}
         
         Extract UP TO {max_items} distinct opportunities (hackathons, scholarships, bounties, grants, competitions) from the page below.
         
@@ -83,13 +106,14 @@ class ReaderLLM:
         - Bounty platforms: Each bounty listing is one opportunity.
         - Kaggle: Each competition is one opportunity.
         
-        General Rules:
-        1. If deadline is missing, use null (don't guess).
-        2. Geo Tags: "Remote"/"Online" → add "Global". Detect country requirements.
-        3. Type Tags: Hackathon, Grant, Bounty, Scholarship, Competition, Internship
-        4. If prize is unclear or not explicitly stated as a number, set amount_display to "Check listing for prize pool" and amount to 0. NEVER use "Varies".
-        5. Skip expired opportunities if clearly marked as closed/ended.
-        6. source_url should be the direct link if visible, else use "{source_url}"
+        General Rules (STRICT QUALITY CONTROL):
+        1. CRITICAL: SKIP any opportunity where the deadline has already passed (Today's Date: {current_date}).
+        2. SKIP sections clearly marked as "Ended", "Past", "Closed", or "Finished".
+        3. If deadline is missing, use null (don't guess).
+        4. Geo Tags: "Remote"/"Online" → add "Global". Detect country requirements.
+        5. Type Tags: Hackathon, Grant, Bounty, Scholarship, Competition, Internship
+        6. If prize is unclear or not explicitly stated as a number, set amount_display to "Check listing for prize pool" and amount to 0. NEVER use "Varies".
+        7. source_url should be the direct link if visible, else use "{source_url}"
         
         Source Page URL: {source_url}
         
@@ -166,14 +190,25 @@ class ReaderLLM:
 
     async def _call_gemini(self, prompt: str) -> str:
         """
-        Raw Gemini API call — isolated so the rate limiter can wrap it.
+        Raw Gemini/Vertex API call — isolated so the rate limiter can wrap it.
         Raises on error (including 429) so the limiter can retry.
         """
-        model = genai.GenerativeModel(self.MODEL_NAME)
-        response = await model.generate_content_async(
-            prompt, 
-            generation_config={"response_mime_type": "application/json"}
-        )
+        if not self.model:
+             raise Exception("AI Model not initialized")
+
+        if self.use_vertex:
+            # Vertex SDK
+            response = await self.model.generate_content_async(
+                prompt,
+                generation_config={"response_mime_type": "application/json"}
+            )
+        else:
+            # Standard SDK
+            response = await self.model.generate_content_async(
+                prompt, 
+                generation_config={"response_mime_type": "application/json"}
+            )
+            
         return response.text.strip()
 
     def _detect_platform(self, url: str) -> str:

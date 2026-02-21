@@ -43,6 +43,7 @@ venv.bak/
 # Logs
 logs/
 *.log
+backendlog.md
 
 # Testing
 .pytest_cache/

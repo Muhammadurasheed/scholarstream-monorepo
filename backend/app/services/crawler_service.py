@@ -277,9 +277,11 @@ class UniversalCrawlerService:
                 return
             
             # SMART CONTENT GUARD: Allow thin content for JSON API endpoints
-            is_api_endpoint = '/api/' in url or '/graphql' in url
+            is_api_endpoint = '/api/' in url or '/graphql' in url or 'dorahacks.io' in url
                 
-            if len(content) < 5000 and not is_api_endpoint:
+            # Lower threshold to 128 bytes for APIs, 3000 for regular pages
+            min_size = 128 if is_api_endpoint else 3000
+            if len(content) < min_size:
                 logger.warning("Drone mission aborted: Content too thin (Potential Loading Shell)", url=url, size=len(content))
                 return
             
@@ -400,8 +402,11 @@ class UniversalCrawlerService:
                 
                 content = await page.content()
                 
-                # Validate content isn't empty/shell
-                if len(content) > 1000:
+                # Validate content isn't empty/shell (JSON APIs can be small)
+                is_api = '/api/' in url or 'dorahacks.io' in url
+                min_len = 128 if is_api else 1500
+                
+                if len(content) >= min_len:
                     return content
                 else:
                     logger.warning("Content too thin, retrying", url=url, length=len(content))

@@ -10,6 +10,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { queryClient } from "@/lib/queryClient";
+import { PublicRoute } from "./components/PublicRoute";
 
 // Lazy load all pages for code splitting (FAANG-level performance)
 const Landing = lazy(() => import("./pages/Landing"));
@@ -38,10 +39,39 @@ const App = () => (
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               <Suspense fallback={<LoadingScreen />}>
                 <Routes>
-                  <Route path="/" element={<Landing />} />
-                  <Route path="/signup" element={<SignUp />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/forgot-password" element={<ForgotPassword />} />
+
+                  <Route
+                    path="/"
+                    element={
+                      <PublicRoute>
+                        <Landing />
+                      </PublicRoute>
+                    }
+                  />
+                  <Route
+                    path="/signup"
+                    element={
+                      <PublicRoute>
+                        <SignUp />
+                      </PublicRoute>
+                    }
+                  />
+                  <Route
+                    path="/login"
+                    element={
+                      <PublicRoute>
+                        <Login />
+                      </PublicRoute>
+                    }
+                  />
+                  <Route
+                    path="/forgot-password"
+                    element={
+                      <PublicRoute>
+                        <ForgotPassword />
+                      </PublicRoute>
+                    }
+                  />
                   <Route
                     path="/onboarding"
                     element={

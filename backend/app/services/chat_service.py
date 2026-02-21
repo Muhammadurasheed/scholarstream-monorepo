@@ -33,7 +33,7 @@ Design: Google-grade Agentic Workflow. The model decides the path.
 """
 
 import google.generativeai as genai
-from google.generativeai.types import FunctionDeclaration, Tool
+from google.generativeai.types import FunctionDeclaration, Tool, HarmCategory, HarmBlockThreshold
 import json
 import asyncio
 from typing import Dict, Any, List, Optional
@@ -54,10 +54,29 @@ class ReActChatService:
     """True AI Agent powered by Gemini Function Calling"""
 
     def __init__(self):
-        if not settings.gemini_api_key:
-            raise Exception("GEMINI_API_KEY not configured in settings")
+        # Try initializing Vertex AI first (Enterprise/Production path)
+        self.use_vertex = False
+        try:
+            import vertexai
+            from vertexai.generative_models import GenerativeModel, Tool as VertexTool, FunctionDeclaration as VertexFunctionDeclaration
+            import google.auth
+            from google.auth.exceptions import DefaultCredentialsError
 
-        genai.configure(api_key=settings.gemini_api_key)
+            # STRICT CHECK: Only use Vertex if we have actual Google Cloud credentials (ADC)
+            try:
+                credentials, project = google.auth.default()
+                vertexai.init(project=project, location="us-central1")
+                self.use_vertex = True
+                logger.info("Vertex AI initialized for Chat", mode="enterprise_adc")
+            except DefaultCredentialsError:
+                logger.warning("No Google Cloud ADC found for Chat. Vertex AI SDK skipped.")
+                raise Exception("No ADC")
+
+        except Exception:
+            logger.warning("Vertex AI initialization failed for Chat. Falling back to API Key.")
+            if not settings.gemini_api_key:
+                raise Exception("GEMINI_API_KEY not configured in settings")
+            genai.configure(api_key=settings.gemini_api_key)
         
         # ── Define Tools ──
         self.tools_map = {
@@ -115,24 +134,111 @@ class ReActChatService:
             )
         ]
 
-        # Initialize GenerativeModel with tools
-        self.model = genai.GenerativeModel(
-            model_name=settings.gemini_model,
-            tools=self.tools,
-            system_instruction="""You are ScholarStream AI, a world-class opportunity advisor.
+        if self.use_vertex:
+            from vertexai.generative_models import GenerativeModel, Tool as VertexTool, FunctionDeclaration as VertexFunctionDeclaration
+            
+            # Re-define tools for Vertex AI SDK (it uses slightly different class structure)
+            vertex_tools = [
+                VertexTool(
+                    function_declarations=[
+                        VertexFunctionDeclaration(
+                            name="search_database",
+                            description="Search the local database for scholarships, hackathons, and bounties. Use this for specific types or general searches.",
+                            parameters={
+                                "type": "object",
+                                "properties": {
+                                    "type": {"type": "string", "description": "Type of opportunity: 'scholarship', 'hackathon', 'bounty', 'grant', or 'any'"},
+                                    "min_amount": {"type": "integer", "description": "Minimum amount in USD (optional)"},
+                                    "limit": {"type": "integer", "description": "Max results to return (default 20)"}
+                                },
+                            }
+                        ),
+                        VertexFunctionDeclaration(
+                            name="vector_search",
+                            description="Semantic search to find matches by meaning (e.g. 'Lagos hackathon', 'freshman funding'). Use this for keyword-rich requests.",
+                            parameters={
+                                "type": "object",
+                                "properties": {
+                                    "query": {"type": "string", "description": "The search query"},
+                                    "limit": {"type": "integer", "description": "Max results to return (default 20)"}
+                                },
+                                "required": ["query"]
+                            }
+                        ),
+                        VertexFunctionDeclaration(
+                            name="dispatch_scout",
+                            description="Fire autonomous web crawlers (Sentinel/Cortex) to find FRESH online opportunities. Use this if the DB results seem thin or user wants something now.",
+                            parameters={
+                                "type": "object",
+                                "properties": {
+                                    "query": {"type": "string", "description": "Crawler search query (e.g. 'hackathons Feb 2026')"}
+                                },
+                                "required": ["query"]
+                            }
+                        ),
+                        VertexFunctionDeclaration(
+                            name="get_user_info",
+                            description="Get the current user's profile details (school, major, interests).",
+                            parameters={"type": "object", "properties": {}}
+                        )
+                    ]
+                )
+            ]
+            
+        # Define Safety Settings (Disable strict blocking for tool reasoning)
+        vertex_safety = {}
+        standard_safety = {}
+        
+        if self.use_vertex:
+            from vertexai.generative_models import HarmCategory as VHC, HarmBlockThreshold as VHB
+            vertex_safety = {
+                VHC.HARM_CATEGORY_HARASSMENT: VHB.BLOCK_NONE,
+                VHC.HARM_CATEGORY_HATE_SPEECH: VHB.BLOCK_NONE,
+                VHC.HARM_CATEGORY_SEXUALLY_EXPLICIT: VHB.BLOCK_NONE,
+                VHC.HARM_CATEGORY_DANGEROUS_CONTENT: VHB.BLOCK_NONE,
+            }
+        
+        standard_safety = {
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+        }
+
+        # DYNAMIC SYSTEM INSTRUCTION with CURRENT DATE
+        current_date = datetime.now().strftime("%B %d, %Y")
+        system_instruction = f"""You are ScholarStream AI, a world-class opportunity advisor and empathetic mentor.
+Current Date: {current_date}
+
 You have access to powerful tools to find scholarships, hackathons, and bounties for students.
-Your goal is to be helpful, proactive, and empathetic.
 
-RULES:
-1. ALWAYS start by getting the user's info if you don't have it.
-2. Check the database (`search_database` or `vector_search`) FIRST.
-3. If database results are thin (<5) or irrelevant, OR if the request implies urgency/freshness, MUST call `dispatch_scout` to search the live web.
-4. "Urgent", "Deadline", "Fast" = HIGH priority. Search for quick-turnaround opportunities.
-5. Provide a helpful final response summarizing what you found and what agents you dispatched.
-6. Be concise but warm. Use "Empathy Sandwich" for stressed users.
+Tone: Professional, warm, globally inclusive, and highly empathetic. Think "Google Principal Engineering meets human-centric design."
 
-Output strictly natural language in the final response."""
-        )
+CORE ADVISOR RULES (GLOBAL STANDARDS):
+1. **Empathy First**: Acknowledge user stress, tight deadlines, or financial concerns with genuine, professional warmth before acting. Keep it neutral and globally appealable.
+2. **Eager Discovery (Smart Rendering)**: 
+   - ALWAYS call `search_database` or `vector_search` FIRST for immediate results. 
+   - Present these results as "Found in our repository".
+   - SIMULTANEOUSLY call `dispatch_scout` for any urgent or specific requests to hunt for fresh leads in the background.
+3. **Temporal Awareness**: You are aware that it is currently {current_date}. Use this for deadline calculations.
+4. **Transparency**: Explain why you are using scouts (e.g., "to ensure you don't miss any brand-new 2026 funding opportunities").
+
+Output strictly natural language in final response. Avoid specific religious or localized jargon to maintain a broad, inclusive appeal."""
+
+        if self.use_vertex:
+            self.model = GenerativeModel(
+                model_name=settings.gemini_model,
+                tools=vertex_tools,
+                system_instruction=system_instruction,
+                safety_settings=vertex_safety
+            )
+        else:
+            self.model = genai.GenerativeModel(
+                model_name=settings.gemini_model,
+                tools=self.tools,
+                system_instruction=system_instruction,
+                safety_settings=standard_safety
+            )
 
         logger.info("ReAct Chat Agent initialized", model=settings.gemini_model)
 
@@ -145,43 +251,82 @@ Output strictly natural language in the final response."""
         """
         Execute the ReAct loop (Reason -> Act -> Observe -> Response).
         """
+        def json_serial(obj):
+            """JSON serializer for objects not serializable by default json code"""
+            if hasattr(obj, 'isoformat'):
+                return obj.isoformat()
+            return str(obj)
+
+        # Contextual metadata to keep the model grounded (DYNAMIC & GLOBAL-GRADE)
+        current_date = datetime.now().strftime("%B %d, %Y")
+        profile = context.get('user_profile', {})
+        context_str = f"""
+[SYSTEM CONTEXT]
+Current Date: {current_date}
+User Profile: {json.dumps(profile, default=json_serial)}
+Target Audience: Global, inclusive, professional students.
+Eager Discovery Plan: 
+- Use `search_database` IMMEDIATELY to find existing legacy opportunities.
+- Trigger `dispatch_scout` aggressively for fresh 2026 events.
+- If the user has a specific deadline (e.g. Feb 25th), prioritize 'Rapid Funding' and 'Emergency Grants'.
+- Synthesize advice that acknowledges the user's specific urgency and constraints profile.
+[/SYSTEM CONTEXT]
+"""
+
         try:
-            # Initialize conversation with history if we had it (skipping for this MVP, treating each req as fresh context)
-            chat = self.model.start_chat(enable_automatic_function_calling=True)
+            # Initialize thinking process early to avoid UnboundLocalError
+            thinking_process = ["🧠 **Analyzing request with FAANG-grade precision...**"]
             
-            # Inject context into the user message invisibly
-            profile = context.get('user_profile', {})
-            context_str = f"\n[System Context: User ID: {user_id}, Name: {profile.get('name', 'Unknown')}, Major: {profile.get('major', 'Unknown')}]"
+            # Initialize conversation with history
+            # For Vertex/Gemini dual support, we avoid enable_automatic_function_calling=True
+            # and use our manual ReAct loop below.
+            if self.use_vertex:
+                # Vertex SDK start_chat is different
+                chat = self.model.start_chat()
+            else:
+                chat = self.model.start_chat(enable_automatic_function_calling=False)
             
-            # ── EXECUTE AGENT LOOP ──
-            # With enable_automatic_function_calling=True, the SDK handles the loop!
-            # It will call our local functions defined in _tool_* methods automatically.
-            # BUT: The SDK expects the actual functions to be passed, not just declarations.
-            # The current google-generativeai SDK's automatic calling features are limited.
-            # We implemented a MANUAL loop below for full control and robustness.
-            
-            # 1. First turn: Send user message
-            response = await gemini_rate_limiter.execute(
-                self._raw_gemini_start_chat, 
-                message + context_str,
-                self.tools
-            )
+            # Start the ReAct turn
+            response = await chat.send_message_async(message + context_str)
 
             tool_outputs = {}
             final_text = ""
-            thinking_process = ["🧠 **Analyzing request...**"]
             
             # Loop for multi-turn tool use (max 5 turns to prevent infinite loops)
-            for _ in range(5):
-                part = response.candidates[0].content.parts[0]
+            for i in range(5):
+                fn = None # Initialize fn at the start of each turn
+                # Iterate through ALL parts to find a function call
+                # Gemini 2.0 often outputs text reasoning BEFORE the function call
                 
-                # Check if model wants to call a function
-                if fn := part.function_call:
-                    func_name = fn.name
-                    func_args = dict(fn.args)
+                # Check ALL parts for function call
+                # Vertex and Standard SDKs have slightly different structures, handled here
+                for part in response.candidates[0].content.parts:
+                    if part.function_call:
+                        fn = part.function_call
+                        # Found a function call!
+                        func_name = fn.name
+                        # Vertex args are already dict-like, standard SDK needs dict()
+                        func_args = dict(fn.args)
+                        
+                        # Use context-rich logging
+                        target_hint = func_args.get('type') or func_args.get('query') or 'your situation'
+                        if func_name == 'search_database':
+                            thinking_process.append(f"🧠 **Reasoning:** I'm scanning our internal records for any befitting {target_hint} that match your profile.")
+                        elif func_name == 'dispatch_scout':
+                            thinking_process.append(f"🛠️ **Action:** Dispatched autonomous agents (Sentinel) to hunt for FRESH {target_hint} online.")
+                        else:
+                            thinking_process.append(f"🧠 **Thought:** Seeking clarity on '{target_hint}' via `{func_name}`...")
+                        
+                        logger.info("Agent invoking tool", tool=func_name, args=func_args)
+                        break 
                     
-                    thinking_process.append(f"🛠️ **Agent Action:** Calling `{func_name}`...")
-                    logger.info("Agent invoking tool", tool=func_name, args=func_args)
+                    # If it's text, log it as reasoning
+                    if part.text:
+                        thinking_process.append(f"🧠 **Thought:** {part.text}")
+
+                # If we found a function call (fn is set), execute it
+                if fn:
+                    # func_name and func_args are already set in loop above
                     
                     # Execute tool provided in self.tools_map
                     if func_name in self.tools_map:
@@ -192,32 +337,80 @@ Output strictly natural language in the final response."""
                             # Store result
                             tool_outputs[func_name] = result
                             
-                            # Feed result back to model
-                            response = await gemini_rate_limiter.execute(
-                                self._raw_gemini_reply_with_function,
-                                chat_session=None, # We are doing manual stateless turns for control
-                                function_name=func_name,
-                                function_response=result,
-                                previous_history=[
-                                    {"role": "user", "parts": [message + context_str]},
-                                    {"role": "model", "parts": [part]}
-                                ]
-                            )
+                            # Log observation with specificity
+                            if isinstance(result, list) and len(result) > 0:
+                                sample_types = list(set([o.get('type','items') for o in result[:3]]))
+                                types_str = f"{', '.join(sample_types)}"
+                                thinking_process.append(f"🔎 **Observation:** Found {len(result)} {types_str} results that look promising.")
+                            else:
+                                thinking_process.append(f"🔎 **Observation:** No direct matches found in this step. Adjusting my search...")
                             
-                            thinking_process.append(f"  → Result: Found {len(result) if isinstance(result, list) else 'info'}")
+                            # Feed result back to model
+                            if self.use_vertex:
+                                from vertexai.generative_models import Content, Part
+                                # Vertex requires explicit history + tool response
+                                # Simplified for now: we restart chat with history
+                                # Note: Vertex SDK handles history in ChatSession better, but for manual loop we rebuild
+                                response = await self.model.start_chat(history=[
+                                    Content(role="user", parts=[Part.from_text(message + context_str)]),
+                                    Content(role="model", parts=[part])
+                                ]).send_message_async(
+                                    Part.from_function_response(
+                                        name=func_name,
+                                        response={'result': result}
+                                    )
+                                )
+                            else:
+                                response = await gemini_rate_limiter.execute(
+                                    self._raw_gemini_reply_with_function,
+                                    chat_session=None, # We are doing manual stateless turns for control
+                                    function_name=func_name,
+                                    function_response=result,
+                                    previous_history=[
+                                        {"role": "user", "parts": [message + context_str]},
+                                        {"role": "model", "parts": [part]}
+                                    ]
+                                )
+                            
                         except Exception as e:
                             logger.error("Tool execution failed", tool=func_name, error=str(e))
+                            thinking_process.append(f"⚠️ **Error:** Tool `{func_name}` failed: {str(e)}")
                             break
                     else:
                         break # Unknown tool
                 else:
                     # Model produced text response - we are done
                     final_text = part.text
+                    thinking_process.append("✅ **Plan:** Synthesizing final response.")
                     break
 
-            # If we exited loop without text (e.g. tool loop limit), force a text generation
+            # IMPORTANT: Re-invoke the model once more if we only have tool results but no text
+            # This allows the model to summarize the found opportunities empathetically.
             if not final_text and tool_outputs:
-                 final_text = "I've gathered the information you asked for. Please check the results below."
+                thinking_process.append("✅ **Synthesis:** Finalizing my advice based on what I found...")
+                
+                # Construct a synthetic turn to get the model's final word
+                summary_prompt = "I have gathered the information from my tools. Summarize your findings empathetically, acknowledging the user's specific constraints (deadlines, financial need) if mentioned. Don't mention tool names."
+                
+                if self.use_vertex:
+                    # In Vertex manual loop, we send one last message
+                    response = await self.model.start_chat(history=[
+                        Content(role="user", parts=[Part.from_text(message + context_str)]),
+                        Content(role="model", parts=[part])
+                    ]).send_message_async(summary_prompt)
+                    final_text = response.candidates[0].content.parts[0].text
+                else:
+                    # Standard SDK
+                    from vertexai.generative_models import Part as VertexPart # Need for type consistency if mixed
+                    response = await gemini_rate_limiter.execute(
+                        self._raw_gemini_reply_with_text,
+                        message=summary_prompt,
+                        previous_history=[
+                             {"role": "user", "parts": [message + context_str]},
+                             {"role": "model", "parts": [part]}
+                        ]
+                    )
+                    final_text = response.text
 
             # Persist chat
             await db.save_chat_message(user_id, "user", message)
@@ -235,11 +428,12 @@ Output strictly natural language in the final response."""
                         all_opportunities.append(o)
             
             # Personalize/Score them
+            thinking_process.append("📊 **Analysis:** Ranking and scoring opportunities for you...")
             ranked_opps = self._rank_opportunities(all_opportunities, profile)
 
             return {
                 'message': final_text,
-                'thinking_process': "\n".join(thinking_process),
+                'thinking_process': "\n\n".join(thinking_process),
                 'opportunities': ranked_opps[:12],
                 'suggestions': self._generate_suggestions(final_text, ranked_opps),
                 'actions': self._generate_actions(ranked_opps)
@@ -249,41 +443,95 @@ Output strictly natural language in the final response."""
             logger.error("ReAct Agent failed", error=str(e))
             import traceback
             traceback.print_exc()
+            
+            # Preserve the thinking process so the user sees what happened
+            error_msg = f"⚠️ **Agent Error:** {str(e)}"
+            if "429" in str(e):
+                error_msg = "⚠️ **High Traffic:** I'm having trouble thinking clearly due to high load. Please try again in a minute."
+            
+            thinking_process.append(error_msg)
+            
             return {
-                'message': "I'm having a bit of trouble connecting to my tools right now. I've noted your request and will try to process it shortly.",
+                'message': "I apologize, but I encountered an error while processing your request. Please check the logs above for details.",
                 'opportunities': [],
-                'thinking_process': "⚠️ **Agent Error:** Connection interrupted during reasoning step."
+                'thinking_process': "\n".join(thinking_process),
+                'suggestions': [],
+                'actions': []
             }
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # TOOLS IMPLEMENTATION
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+        return filtered[:limit]
+
     async def _tool_search_database(self, user_id: str, type: str = "any", min_amount: int = 0, limit: int = 20):
         """Tool: Search local database with filters"""
+        # Ensure numeric types are actually integers/numbers (LLMs sometimes pass strings)
+        try:
+             limit = int(limit)
+             min_amount = int(min_amount)
+        except (ValueError, TypeError):
+             limit = 20
+             min_amount = 0
+
         start = datetime.now()
+        now_str = start.strftime("%Y-%m-%d")
         opps = await db.get_all_scholarships()
         
         filtered = []
         for o in opps:
-            # Basic type filtering logic...
-            if type != "any" and type.lower() not in self._infer_type(o):
+            try:
+                # Convert Pydantic model to dict for safe access
+                o_dict = o.model_dump() if hasattr(o, 'model_dump') else o.dict()
+            except Exception:
+                # Fallback if it's already a dict or something else
+                o_dict = dict(o) if isinstance(o, dict) else {}
+
+            # 1. STRICT DEADLINE GUARD (Principal Engineering Standard)
+            # Filter out any opportunity where the deadline has passed
+            deadline = o_dict.get('deadline')
+            if deadline and deadline < now_str:
                 continue
-            if o.amount and o.amount < min_amount:
+
+            # 2. Type filtering logic
+            if type != "any" and type.lower() not in self._infer_type(o_dict):
                 continue
-            filtered.append(o.dict())
+            
+            # 3. Filter by amount
+            amt = o_dict.get('amount') or 0
+            if amt < min_amount:
+                continue
+                
+            filtered.append(o_dict)
             
         return filtered[:limit]
 
     async def _tool_vector_search(self, user_id: str, query: str, limit: int = 20):
         """Tool: Search by semantic meaning"""
         try:
+            limit = int(limit)
+        except (ValueError, TypeError):
+            limit = 20
+
+        try:
             from app.services.vectorization_service import vectorization_service
             vec = await vectorization_service.vectorize_query(query)
             if not vec: return []
             
-            results = await db.semantic_search(vec, limit=limit)
-            return [r.dict() for r in results]
+            results = await db.semantic_search(vec, limit=limit * 2) # Get more to allow for filtering
+            
+            now_str = datetime.now().strftime("%Y-%m-%d")
+            filtered = []
+            for r in results:
+                r_dict = r.dict()
+                deadline = r_dict.get('deadline')
+                if deadline and deadline < now_str:
+                    continue
+                filtered.append(r_dict)
+                if len(filtered) >= limit:
+                    break
+            return filtered
         except Exception as e:
             logger.error("Vector search tool failed", error=str(e))
             return []
@@ -308,8 +556,14 @@ Output strictly natural language in the final response."""
 
     async def _raw_gemini_start_chat(self, prompt, tools):
         """Wrapped call for start of chat"""
-        model = genai.GenerativeModel(settings.gemini_model, tools=tools)
-        return await model.generate_content_async(prompt)
+        if self.use_vertex:
+             # Vertex SDK GenerativeModel has generate_content_async too
+             # But the 'tools' were already set at init for Vertex
+             return await self.model.generate_content_async(prompt)
+        else:
+            # Standard SDK
+            model = genai.GenerativeModel(settings.gemini_model, tools=tools)
+            return await model.generate_content_async(prompt)
 
     async def _raw_gemini_reply_with_function(self, chat_session, function_name, function_response, previous_history):
         """Wrapped call for sending tool outputs back"""
@@ -330,6 +584,12 @@ Output strictly natural language in the final response."""
         model = genai.GenerativeModel(settings.gemini_model, tools=self.tools)
         chat = model.start_chat(history=previous_history)
         return await chat.send_message_async(tool_response)
+
+    async def _raw_gemini_reply_with_text(self, message, previous_history):
+        """Standard SDK turn for text-only summary"""
+        model = genai.GenerativeModel(settings.gemini_model, tools=self.tools)
+        chat = model.start_chat(history=previous_history)
+        return await chat.send_message_async(message)
 
     def _rank_opportunities(self, opps: List[Dict], profile: Dict) -> List[Dict[str, Any]]:
         """Score, rank, and format opportunities."""
@@ -382,15 +642,15 @@ Output strictly natural language in the final response."""
         name_str = (opp.get('name') or '').lower()
         combined = f"{tags_str} {desc_str} {name_str}"
 
-        if any(kw in combined for kw in ['hackathon', 'hack', 'buildathon', 'codeathon']):
+        if any(kw in combined for kw in ['hackathon', 'hack', 'buildathon', 'codeathon', 'ideathon', 'builder']):
             return 'hackathon'
-        elif any(kw in combined for kw in ['bounty', 'bug bounty', 'vulnerability']):
+        elif any(kw in combined for kw in ['bounty', 'bug bounty', 'vulnerability', 'testnet', 'auditing']):
             return 'bounty'
-        elif any(kw in combined for kw in ['competition', 'contest', 'challenge', 'olympiad']):
+        elif any(kw in combined for kw in ['competition', 'contest', 'challenge', 'olympiad', 'tournament', 'quiz']):
             return 'competition'
-        elif any(kw in combined for kw in ['grant', 'funding', 'seed']):
+        elif any(kw in combined for kw in ['grant', 'funding', 'seed', 'investment', 'acceleration', 'equity-free']):
             return 'grant'
-        elif any(kw in combined for kw in ['internship', 'intern', 'fellowship']):
+        elif any(kw in combined for kw in ['internship', 'intern', 'fellowship', 'graduate program', 'trainee', 'apprentice']):
             return 'internship'
         return 'scholarship'
 
@@ -444,27 +704,48 @@ Output strictly natural language in the final response."""
         return actions
     
     def _interleave_for_diversity(self, sorted_results: List[Dict], target_count: int = 12) -> List[Dict]:
-        """Relevance-first diversity interleaving."""
-        if len(sorted_results) <= target_count:
+        """
+        Multidimensional Diversity Interleaving (Google-grade logic).
+        Balances by both 'Type' and 'Platform/Source'.
+        """
+        if len(sorted_results) <= 4: # Very low results - don't interleave
             return sorted_results
 
         final = []
         used_ids = set()
 
-        # Phase 1: Top 6 by pure relevance
-        for item in sorted_results[:6]:
+        def get_platform(opp):
+            url = (opp.get('source_url') or "").lower()
+            if 'dorahacks' in url: return 'dorahacks'
+            if 'devpost' in url: return 'devpost'
+            if 'mlh.io' in url: return 'mlh'
+            if 'devfolio' in url: return 'devfolio'
+            if 'hackquest' in url: return 'hackquest'
+            if 'lablab' in url: return 'lablab'
+            if 'scholarships.com' in url or 'fastweb' in url: return 'scholarship_hub'
+            return 'other'
+
+        # Phase 1: Top 4 by pure relevance/score (High-confidence anchors)
+        for item in sorted_results[:4]:
             final.append(item)
             used_ids.add(item['id'])
 
-        # Phase 2: Round-robin by type
+        # Phase 2: Interleave remaining slots by Platform AND Type
         buckets: Dict[str, List[Dict]] = {}
         for item in sorted_results:
-            if item['id'] in used_ids:
-                continue
-            t = item.get('type', 'scholarship')
-            buckets.setdefault(t, []).append(item)
+            if item['id'] in used_ids: continue
+            
+            platform = get_platform(item)
+            opp_type = item.get('type', 'scholarship')
+            
+            # Create a combined diversity key
+            comb_key = f"{platform}_{opp_type}"
+            buckets.setdefault(comb_key, []).append(item)
 
         bucket_keys = list(buckets.keys())
+        # Sort bucket keys by the highest score in each bucket to maintain some relevance
+        bucket_keys.sort(key=lambda k: buckets[k][0].get('match_score', 0) if buckets[k] else 0, reverse=True)
+        
         idx = 0
         while len(final) < target_count and bucket_keys:
             key = bucket_keys[idx % len(bucket_keys)]
@@ -480,8 +761,7 @@ Output strictly natural language in the final response."""
 
         # Backfill if short
         for item in sorted_results:
-            if len(final) >= target_count:
-                break
+            if len(final) >= target_count: break
             if item['id'] not in used_ids:
                 final.append(item)
                 used_ids.add(item['id'])

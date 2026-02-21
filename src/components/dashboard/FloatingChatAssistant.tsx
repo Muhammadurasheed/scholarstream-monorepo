@@ -28,40 +28,53 @@ interface Message {
   opportunities?: Scholarship[];
   actions?: Action[];
   suggestions?: string[];
+  isThinking?: boolean; // New flag for active thinking state
 }
 
 // V2: Collapsible Thinking Process Component
-const ThinkingProcessSection = ({ content }: { content: string }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+// V2: Collapsible Thinking Process Component
+const ThinkingProcessSection = ({ content, isThinking }: { content: string, isThinking?: boolean }) => {
+  const [isExpanded, setIsExpanded] = useState(true); // Default to expanded during thinking
+
+  // Auto-expand if thinking
+  useEffect(() => {
+    if (isThinking) setIsExpanded(true);
+  }, [isThinking]);
 
   if (!content) return null;
 
   return (
-    <div className="mb-3 rounded-lg border border-primary/20 bg-primary/5 overflow-hidden">
+    <div className="mb-3 rounded-lg border border-primary/20 bg-primary/5 overflow-hidden animate-in fade-in zoom-in-95 duration-300">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <Brain className="h-3.5 w-3.5" />
-          <span>Search Analysis</span>
+          <Brain className={`h-3.5 w-3.5 ${isThinking ? 'animate-pulse text-violet-500' : ''}`} />
+          <span>{isThinking ? 'Agent Thinking...' : 'Thought Process'}</span>
         </div>
         {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
       </button>
 
       {isExpanded && (
-        <div className="px-3 pb-3 text-xs text-muted-foreground">
+        <div className="px-3 pb-3 text-xs text-muted-foreground max-h-[200px] overflow-y-auto font-mono">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
-              p: ({ node, ...props }) => <p className="my-1" {...props} />,
+              p: ({ node, ...props }) => <p className="my-1 whitespace-pre-wrap" {...props} />,
               strong: ({ node, ...props }) => <strong className="text-foreground font-semibold" {...props} />,
-              ul: ({ node, ...props }) => <ul className="list-disc list-inside my-1" {...props} />,
-              li: ({ node, ...props }) => <li className="ml-2" {...props} />,
+              ul: ({ node, ...props }) => <ul className="list-none space-y-1 my-1" {...props} />,
+              li: ({ node, ...props }) => <li className="pl-1 border-l-2 border-primary/30" {...props} />,
             }}
           >
             {content}
           </ReactMarkdown>
+          {isThinking && (
+            <div className="flex items-center gap-2 mt-2 text-primary/70 animate-pulse">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>Processing next step...</span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -142,8 +155,9 @@ export const FloatingChatAssistant = () => {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}`);
+      if (!response.status || response.status === 500) {
+        // Handle streaming or partial response if we implement it later
+        // For now, assume single response
       }
 
       const data = await response.json();
@@ -159,9 +173,14 @@ export const FloatingChatAssistant = () => {
         suggestions: data.suggestions && data.suggestions.length > 0
           ? data.suggestions
           : buildDefaultSuggestions(messageText),
+        isThinking: false
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages(prev => {
+        // Remove the temporary loading message if we added one (not currently doing that, but good practice)
+        return [...prev, assistantMessage];
+      });
+
     } catch (error) {
       console.error('Chat error:', error);
 
@@ -173,6 +192,7 @@ export const FloatingChatAssistant = () => {
           'Browse dashboard',
           'View saved opportunities',
         ],
+        thinkingProcess: `⚠️ **Connection Error:** ${error instanceof Error ? error.message : 'Unknown error'}`
       };
       setMessages(prev => [...prev, fallbackMessage]);
       toast.error('Connection issue. Please try again.');
@@ -180,6 +200,7 @@ export const FloatingChatAssistant = () => {
       setIsLoading(false);
     }
   };
+
 
   const buildDefaultActions = (opportunities?: Scholarship[]): Action[] => {
     if (!opportunities || opportunities.length === 0) return [];
@@ -483,27 +504,17 @@ export const FloatingChatAssistant = () => {
             </div>
           ))}
 
-          {/* ENHANCED: Real-time search indicator */}
+          {/* ENHANCED: Real-time search indicator REPLACED by Thinking Process */}
           {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-muted rounded-lg p-3 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  <span className="text-xs font-semibold">Searching opportunities...</span>
-                </div>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                    <span>Scanning database</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '200ms' }} />
-                    <span>Filtering by location & deadline</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '400ms' }} />
-                    <span>Ranking by match score</span>
-                  </div>
+            <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="max-w-[85%] rounded-lg p-3 bg-muted text-foreground">
+                <ThinkingProcessSection
+                  content={`🧠 **Initializing Agent...**\n\n🔍 **Analyzing Request:** "${input}"...`}
+                  isThinking={true}
+                />
+                <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>ScholarStream AI is working...</span>
                 </div>
               </div>
             </div>
