@@ -1,14 +1,9 @@
+import { API_URL } from '../config';
 
 // Background Service Worker for ScholarStream Co-Pilot
 // Handles Push Notifications via WebSocket with REAL Firebase Auth
 
 // API Configuration
-const API_URL = 'https://scholarstream-backend-opdnpd6bsq-uc.a.run.app';
-/*
-const API_URL = '__VITE_API_URL__' !== '__VITE_API_URL__'
-    ? '__VITE_API_URL__'
-    : 'http://localhost:8081';
-*/
 const WS_URL = API_URL.replace('http', 'ws') + '/ws/opportunities';
 
 let websocket: WebSocket | null = null;
@@ -33,7 +28,7 @@ chrome.sidePanel
     .catch((error) => console.error(error));
 
 // Listen for messages from Content Script or Side Panel
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender) => {
     if (message.type === 'OPEN_SIDE_PANEL') {
         if (sender.tab && sender.tab.windowId) {
             chrome.sidePanel.open({ windowId: sender.tab.windowId })

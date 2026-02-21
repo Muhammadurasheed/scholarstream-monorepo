@@ -1,19 +1,65 @@
-console.log("ScholarStream Content Script Loaded");
+// ========== IN-LINED DISTINGUISHED DEPS (Prevent ESM Chunks) ==========
 
-import { getPageContext } from '../utils/domScanner';
-
-// API Configuration - matches extension config
-// API Configuration - Hardcoded for production
-const API_URL = 'https://scholarstream-backend-opdnpd6bsq-uc.a.run.app';
-/*
-const API_URL = '__VITE_API_URL__' !== '__VITE_API_URL__'
-    ? '__VITE_API_URL__'
-    : 'http://localhost:8081';
-*/
-
+/**
+ * Extension Configuration (In-lined for Content Script Stability)
+ * CRITICAL: Do NOT use import.meta here. Content scripts are NOT modules
+ * and the browser parser will throw a SyntaxError even on 'typeof import.meta'.
+ */
+const API_URL = 'http://localhost:8081';
 const ENDPOINTS = {
+    chat: `${API_URL}/api/extension/chat`,
     mapFields: `${API_URL}/api/extension/map-fields`,
+    userProfile: `${API_URL}/api/extension/user-profile`,
+    saveApplicationData: `${API_URL}/api/extension/save-application-data`,
+    parseDocument: `${API_URL}/api/documents/parse`,
+    supportedTypes: `${API_URL}/api/documents/supported-types`,
 };
+
+/**
+ * Storage Safety Helpers (In-lined)
+ */
+function isExtensionValid(): boolean {
+    return typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
+}
+
+function getStorage() {
+    if (!isExtensionValid()) return null;
+    if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) return null;
+    return chrome.storage.local;
+}
+
+/**
+ * DOM Scanner (In-lined)
+ */
+function getPageContext() {
+    const title = document.title;
+    const url = window.location.href;
+    const clone = document.body.cloneNode(true) as HTMLElement;
+    const scripts = clone.getElementsByTagName('script');
+    while (scripts[0]) scripts[0].parentNode?.removeChild(scripts[0]);
+    const styles = clone.getElementsByTagName('style');
+    while (styles[0]) styles[0].parentNode?.removeChild(styles[0]);
+    const content = clone.innerText || "";
+    const inputs = Array.from(document.querySelectorAll('input, textarea, select')).map((el, index) => {
+        const element = el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+        const rect = element.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0 || element.type === 'hidden') return null;
+        return {
+            id: element.id || `input_${index}`,
+            name: element.name,
+            type: element.type,
+            placeholder: 'placeholder' in element ? element.placeholder : '',
+            label: "", // Simplified for in-line stability
+            value: element.value,
+            selector: "#" + (element.id || `input_${index}`)
+        };
+    }).filter(Boolean);
+
+    return { title, url, content: content.substring(0, 50000), forms: inputs };
+}
+
+// ========== CONTENT SCRIPT LOGIC ==========
+console.log("ScholarStream Content Script Loaded (Self-Contained Mode)");
 
 // ========== ENHANCED FIELD CONTEXT (Phase 3) ==========
 interface FieldContext {
@@ -86,7 +132,10 @@ window.addEventListener('scholarstream-auth-sync', ((event: CustomEvent) => {
 
     console.log('🔑 [EXT] Auth sync event received from web app!');
 
-    chrome.storage.local.set({
+    const storage = getStorage();
+    if (!storage) return;
+
+    storage.set({
         authToken: token,
         userProfile: user || {}
     }, () => {
@@ -96,7 +145,10 @@ window.addEventListener('scholarstream-auth-sync', ((event: CustomEvent) => {
 
 window.addEventListener('scholarstream-auth-logout', () => {
     console.log('🚪 [EXT] Logout event received');
-    chrome.storage.local.remove(['authToken', 'userProfile', 'lastLoggedToken']);
+    const storage = getStorage();
+    if (storage) {
+        storage.remove(['authToken', 'userProfile', 'lastLoggedToken']);
+    }
 });
 
 // ===== FALLBACK: Also poll localStorage for auth token (for pages already loaded) =====
@@ -104,13 +156,14 @@ if (window.location.host.includes('localhost') || window.location.host.includes(
     const extractAndSendToken = () => {
         let token = localStorage.getItem('scholarstream_auth_token');
 
+        // Check if token exists in firebase auto-storage if not in our custom key
         if (!token) {
             Object.keys(localStorage).forEach(key => {
                 if (key.includes('firebase:authUser')) {
                     try {
-                        const user = JSON.parse(localStorage.getItem(key) || '{}');
-                        if (user.stsTokenManager && user.stsTokenManager.accessToken) {
-                            token = user.stsTokenManager.accessToken;
+                        const userData = JSON.parse(localStorage.getItem(key) || '{}');
+                        if (userData.stsTokenManager && userData.stsTokenManager.accessToken) {
+                            token = userData.stsTokenManager.accessToken;
                         }
                     } catch (e) {
                         // ignore parse errors
@@ -120,18 +173,29 @@ if (window.location.host.includes('localhost') || window.location.host.includes(
         }
 
         if (token) {
-            chrome.storage.local.get(['authToken'], (result) => {
-                // Only update if different (avoid unnecessary writes)
-                if (result.authToken !== token) {
-                    chrome.storage.local.set({ authToken: token }, () => {
-                        console.log('🔑 [EXT] Firebase token captured via localStorage poll');
-                    });
-                }
-            });
+            const storage = getStorage();
+            if (storage) {
+                storage.get(['authToken'], (result) => {
+                    // Only update if different (avoid unnecessary writes)
+                    if (result.authToken !== token) {
+                        storage.set({ authToken: token }, () => {
+                            console.log('🔑 [EXT] Auth token synced via localStorage');
+                        });
+                    }
+                });
+            }
         }
     };
 
-    // Initial check + periodic poll (less aggressive)
+    // Listen for storage events (emitted when web app signs in)
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'scholarstream_auth_token' || (e.key && e.key.includes('firebase:authUser'))) {
+            console.log('🔄 [EXT] Storage event detected: Syncing auth...');
+            extractAndSendToken();
+        }
+    });
+
+    // Also poll periodically as a failsafe
     extractAndSendToken();
     setInterval(extractAndSendToken, 5000);
 }
@@ -498,7 +562,10 @@ class FocusEngine {
         );
 
         try {
-            const stored = await chrome.storage.local.get(['authToken', 'userProfile', 'documentStore']);
+            const storage = getStorage();
+            if (!storage) throw new Error('Extension context invalidated');
+
+            const stored = await storage.get(['authToken', 'userProfile', 'documentStore']);
             const authToken = stored.authToken;
             if (!authToken) throw new Error('Not authenticated');
 
@@ -945,8 +1012,11 @@ IMPORTANT:
 
         const target = this.activeElement as HTMLInputElement;
 
+        const storage = getStorage();
+        if (!storage) return;
+
         // CRITICAL FIX: Check for documents in NEW documentStore, not legacy projectContext
-        const stored = await chrome.storage.local.get(['userProfile', 'documentStore']);
+        const stored = await storage.get(['userProfile', 'documentStore']);
         const hasProfile = stored.userProfile && Object.keys(stored.userProfile).length > 0;
 
         // Check new multi-document store
@@ -972,10 +1042,10 @@ IMPORTANT:
         }
 
         // Generate with available context
-        await this.generateWithEnhancedContext(fieldContext, hasProfile, hasDocument);
+        await this.generateWithEnhancedContext(fieldContext);
     }
 
-    private async generateWithEnhancedContext(fieldContext: FieldContext, hasProfile: boolean, hasDocument: boolean) {
+    private async generateWithEnhancedContext(fieldContext: FieldContext) {
         if (!this.activeElement) return;
 
         this.isStreaming = true;
@@ -988,7 +1058,7 @@ IMPORTANT:
         }
 
         try {
-            const result = await generateFieldContentEnhanced(fieldContext, hasProfile, hasDocument);
+            const result = await generateFieldContentEnhanced(fieldContext);
 
             const content = result.sparkle_result?.content || result.filled_value || result.template_content;
             const reasoning = result.sparkle_result?.reasoning || result.reasoning || 'Generated based on available context';
@@ -1025,13 +1095,13 @@ IMPORTANT:
         const target = this.activeElement as HTMLInputElement;
         const fieldContext = this.analyzeField(target);
 
-        // FIXED: Check documentStore instead of legacy projectContext
-        const stored = await chrome.storage.local.get(['userProfile', 'documentStore']);
-        const hasProfile = stored.userProfile && Object.keys(stored.userProfile).length > 0;
-        const documentStore = stored.documentStore as { documents: any[] } | undefined;
-        const hasDocument = !!(documentStore?.documents && documentStore.documents.length > 0);
+        const storage = getStorage();
+        if (!storage) return;
 
-        await this.generateWithEnhancedContext(fieldContext, hasProfile, hasDocument);
+        // FIXED: Check documentStore instead of legacy projectContext
+        await storage.get(['userProfile', 'documentStore']);
+
+        await this.generateWithEnhancedContext(fieldContext);
     }
 
     private getLabel(el: HTMLElement): string {
@@ -1074,22 +1144,21 @@ new FocusEngine();
 
 // ========== ENHANCED API HELPER (Phase 3) ==========
 async function generateFieldContentEnhanced(
-    fieldContext: FieldContext,
-    hasProfile: boolean,
-    hasDocument: boolean
+    fieldContext: FieldContext
 ) {
     let userProfile: any = {};
     let projectContext = "";
 
+    const storage = getStorage();
+    if (!storage) throw new Error('Extension context invalidated');
+
     try {
-        // CRITICAL FIX: Read last mentioned docs from chat session, NOT all documents
-        // This ensures sparkle uses ONLY the docs that were @mentioned in the last chat message
-        const stored = await chrome.storage.local.get([
+        const stored = await storage.get([
             'userProfile',
             'documentStore',
             'kbSettings',
-            'lastMentionedDocs',  // NEW: Docs mentioned in last chat
-            'lastKbSettings'       // NEW: KB settings from last chat
+            'lastMentionedDocs',
+            'lastKbSettings'
         ]);
 
         userProfile = stored.userProfile || {};
@@ -1097,9 +1166,7 @@ async function generateFieldContentEnhanced(
         const lastMentionedDocs = stored.lastMentionedDocs as { id: string; filename: string }[] | undefined;
         const lastKbSettings = stored.lastKbSettings as { includeProfile: boolean; hasMentionedDocs: boolean } | undefined;
 
-        // STRICT KB SYNC: If docs were mentioned in chat, use ONLY those docs
         if (lastMentionedDocs && lastMentionedDocs.length > 0 && documentStore?.documents) {
-            // Filter to only the mentioned documents
             const mentionedFilenames = new Set(lastMentionedDocs.map(d => d.filename.toLowerCase()));
             const mentionedDocs = documentStore.documents.filter((d: any) =>
                 mentionedFilenames.has(d.filename.toLowerCase())
@@ -1109,70 +1176,36 @@ async function generateFieldContentEnhanced(
                 projectContext = mentionedDocs
                     .map((d: any) => `--- ${d.filename} ---\n${d.content}`)
                     .join('\n\n');
-                console.log(`[Sparkle] Using ONLY ${mentionedDocs.length} mentioned doc(s):`,
-                    mentionedDocs.map((d: any) => d.filename));
             }
 
-            // Use the KB settings from the last chat (profile inclusion)
             if (lastKbSettings && !lastKbSettings.includeProfile) {
-                console.log('[Sparkle] Profile excluded by last chat KB settings');
                 userProfile = {};
             }
         } else if (documentStore?.documents && documentStore.documents.length > 0) {
-            // NO docs were mentioned in chat - fallback: use all docs (backwards compatible)
-            // But check kbSettings toggle
             const kbSettings = stored.kbSettings as { useProfileAsKnowledge?: boolean } | undefined;
 
             projectContext = documentStore.documents
                 .map((d: any) => `--- ${d.filename} ---\n${d.content}`)
                 .join('\n\n');
-            console.log(`[Sparkle] No chat mentions - using all ${documentStore.documents.length} doc(s):`,
-                documentStore.documents.map((d: any) => d.filename));
 
-            // Apply KB toggle for profile
             if (kbSettings && kbSettings.useProfileAsKnowledge === false) {
-                console.log('[Sparkle] Profile excluded by KB toggle');
                 userProfile = {};
             }
-        } else {
-            console.log('[Sparkle] No documents available');
         }
     } catch (e) {
         console.error('[Sparkle] Failed to load context:', e);
     }
 
-    const storedToken = (await chrome.storage.local.get(['authToken'])).authToken;
-    if (!storedToken) {
-        throw new Error('Not authenticated');
-    }
+    const storedToken = (await storage.get(['authToken'])).authToken;
+    if (!storedToken) throw new Error('Not authenticated');
 
-    // Build enhanced instruction based on field analysis
     let instruction = `You are a professional application writer. TASK: Fill the "${fieldContext.fieldCategory.replace('_', ' ')}" field for this form.\n\n`;
+    instruction += `CRITICAL INSTRUCTIONS:\n1. Use User Profile and Project Context.\n2. Do NOT hallucinate.\n3. Adapt tone.\n`;
 
-    instruction += `CRITICAL INSTRUCTIONS:\n`;
-    instruction += `1. You MUST use the information from the provided "User Profile" and "Project Context" (Blueprint).\n`;
-    instruction += `2. Do NOT hallucinate details. If context is missing, use the profile to infer reasonable professional details.\n`;
-    instruction += `3. Adapt your tone to be persuasive and professional.\n`;
-
-    if (fieldContext.characterLimit) {
-        instruction += `\nCONSTRAINT: STRICTLY limit your response to UNDER ${fieldContext.characterLimit} characters. This is a HARD limit.\n`;
-    }
-    if (fieldContext.wordLimit) {
-        instruction += `\nCONSTRAINT: Aim for approximately ${fieldContext.wordLimit} words.\n`;
-    }
-    if (fieldContext.format === 'markdown') {
-        instruction += `\nFORMAT: Use markdown formatting (bolding, lists) for readability.\n`;
-    }
-    if (fieldContext.surroundingContext) {
-        instruction += `\nPAGE CONTEXT: ${fieldContext.surroundingContext}\n`;
-    }
-
-    // Request template if no context available
-    if (!hasProfile && !hasDocument) {
-        instruction += ` Since no profile or project context is available, generate a helpful template with [PLACEHOLDER] brackets that the user can fill in.`;
-    } else if (!hasDocument && ['elevator_pitch', 'description', 'technical', 'challenges'].includes(fieldContext.fieldCategory)) {
-        instruction += ` No project document uploaded - use profile info and generate helpful content with [PROJECT SPECIFIC DETAILS] placeholders where needed.`;
-    }
+    if (fieldContext.characterLimit) instruction += `\nCONSTRAINT: UNDER ${fieldContext.characterLimit} characters.\n`;
+    if (fieldContext.wordLimit) instruction += `\nCONSTRAINT: ~${fieldContext.wordLimit} words.\n`;
+    if (fieldContext.format === 'markdown') instruction += `\nFORMAT: Use markdown.\n`;
+    if (fieldContext.surroundingContext) instruction += `\nPAGE CONTEXT: ${fieldContext.surroundingContext}\n`;
 
     const response = await fetch(ENDPOINTS.mapFields, {
         method: 'POST',
@@ -1183,326 +1216,103 @@ async function generateFieldContentEnhanced(
         body: JSON.stringify({
             form_fields: [],
             user_profile: userProfile,
-            target_field: {
-                ...fieldContext,
-                // Flatten for backend compatibility
-                id: fieldContext.id,
-                name: fieldContext.name,
-                type: fieldContext.type,
-                placeholder: fieldContext.placeholder,
-                label: fieldContext.label,
-                characterLimit: fieldContext.characterLimit,
-                wordLimit: fieldContext.wordLimit,
-                format: fieldContext.format,
-                fieldCategory: fieldContext.fieldCategory,
-                platformHint: fieldContext.platformHint,
-            },
+            target_field: { ...fieldContext },
             project_context: projectContext,
             instruction
         })
     });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API error: ${response.status} - ${errorText}`);
-    }
-
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
     return await response.json();
 }
 
-// Legacy helper for backward compatibility
-async function generateFieldContent(targetField: any) {
-    let userProfile: any = {};
-    try {
-        const stored = await chrome.storage.local.get(['userProfile']);
-        userProfile = stored.userProfile || {};
-    } catch (e) { }
-
-    const storedToken = (await chrome.storage.local.get(['authToken'])).authToken;
-    if (!storedToken) {
-        throw new Error('Not authenticated');
-    }
-
-    let projectContext = "";
-    try {
-        const stored = await chrome.storage.local.get(['projectContext']);
-        projectContext = stored.projectContext || "";
-    } catch (e) { }
-
-    const response = await fetch(ENDPOINTS.mapFields, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${storedToken}`
-        },
-        body: JSON.stringify({
-            form_fields: [],
-            user_profile: userProfile,
-            target_field: targetField,
-            project_context: projectContext,
-            instruction: "Fill this field based on my profile and project."
-        })
-    });
-
-    return await response.json();
-}
-
-// Safe Message Sender
+// Global scope helpers
 const safeSendMessage = async (message: any) => {
-    if (!chrome.runtime?.id) {
-        console.warn("Extension context invalidated. Reload page to reconnect.");
-        return;
-    }
+    if (!isExtensionValid()) return;
     try {
         return await chrome.runtime.sendMessage(message);
-    } catch (e) {
-        const msg = (e as any).message || "";
-        if (msg.includes("Extension context invalidated") || msg.includes("receiving end does not exist")) {
-            console.log("Extension disconnected (reload needed).");
-        } else {
-            console.error("Message send failed:", e);
-        }
-    }
+    } catch (e) { }
 };
 
-// Unique selector generator
 function uniqueSelector(el: Element): string {
     if (el.id) return `#${el.id}`;
     if ((el as any).name) return `[name="${(el as any).name}"]`;
     return el.tagName.toLowerCase();
 }
 
-// Listen for context requests and Auto-Fill commands
+// Listeners
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (!chrome.runtime?.id) return;
-
-    try {
-        if (message.type === 'GET_PAGE_CONTEXT') {
-            const context = getPageContext();
-            console.log("Creating context:", context.title);
-            sendResponse(context);
-        }
-
-        if (message.type === 'AUTO_FILL_REQUEST') {
-            console.log("Agentic Auto-Fill Triggered");
-            handleAutoFill(message.projectContext).then(result => {
-                try {
-                    sendResponse(result);
-                } catch (e) { /* Context likely lost during long op */ }
-            });
-            return true;
-        }
-    } catch (e) {
-        console.error("Content Script Error:", e);
+    if (!isExtensionValid()) return;
+    if (message.type === 'GET_PAGE_CONTEXT') {
+        sendResponse(getPageContext());
+    } else if (message.type === 'AUTO_FILL_REQUEST') {
+        handleAutoFill(message.projectContext).then(sendResponse);
+        return true;
     }
 });
 
 async function handleAutoFill(projectContext?: string) {
-    // ENHANCED: Better field detection - find ALL visible inputs including those in cards/sections
     const allInputs: HTMLElement[] = [];
-
-    // Primary selector: All standard form elements
     document.querySelectorAll('input, select, textarea').forEach(el => allInputs.push(el as HTMLElement));
-
-    // Also find contenteditable elements (rich text editors)
     document.querySelectorAll('[contenteditable="true"]').forEach(el => allInputs.push(el as HTMLElement));
 
-    // Deduplicate by checking if element is already included
-    const seenElements = new Set<HTMLElement>();
-    const uniqueInputs = allInputs.filter(el => {
-        if (seenElements.has(el)) return false;
-        seenElements.add(el);
-        return true;
-    });
+    const formFields = allInputs.map((el: any) => ({
+        id: el.id || '',
+        name: el.name || '',
+        type: el.type || el.tagName.toLowerCase(),
+        placeholder: el.placeholder || '',
+        label: (el.labels?.[0]?.textContent || el.placeholder || el.name || '').slice(0, 100),
+        selector: uniqueSelector(el)
+    })).filter(f => !['hidden', 'submit', 'button', 'file'].includes(f.type));
 
-    const formFields = uniqueInputs.map((el: any) => {
-        // Enhanced label detection - look in multiple places
-        let label = '';
-
-        // 1. Check for label[for="id"]
-        if (el.id) {
-            const labelEl = document.querySelector(`label[for="${el.id}"]`);
-            if (labelEl) label = labelEl.textContent?.trim() || '';
-        }
-
-        // 2. Check if wrapped in label
-        if (!label) {
-            const closestLabel = el.closest('label');
-            if (closestLabel) label = closestLabel.textContent?.trim() || '';
-        }
-
-        // 3. Check for previous sibling (often a label or heading)
-        if (!label && el.previousElementSibling) {
-            const prev = el.previousElementSibling;
-            if (prev.tagName === 'LABEL' || prev.tagName.match(/^H[1-6]$/) || prev.classList.contains('label')) {
-                label = prev.textContent?.trim() || '';
-            }
-        }
-
-        // 4. Check parent for section heading or card title
-        if (!label) {
-            const parent = el.closest('section, .card, .form-group, [class*="field"], [class*="input"]');
-            if (parent) {
-                const heading = parent.querySelector('h1, h2, h3, h4, h5, h6, label, .label, [class*="title"], [class*="heading"]');
-                if (heading && heading !== el) {
-                    label = heading.textContent?.trim() || '';
-                }
-            }
-        }
-
-        // 5. Fallback: Check aria-label or data attributes
-        if (!label) {
-            label = el.getAttribute('aria-label') ||
-                el.getAttribute('data-label') ||
-                el.getAttribute('title') ||
-                el.name?.replace(/[-_]/g, ' ') || '';
-        }
-
-        return {
-            id: el.id || '',
-            name: el.name || '',
-            type: el.type || el.tagName.toLowerCase(),
-            placeholder: el.placeholder || '',
-            label: label.slice(0, 150), // Extended limit for more context
-            selector: uniqueSelector(el),
-            // Extra context for better matching
-            ariaLabel: el.getAttribute('aria-label') || '',
-            dataTestId: el.getAttribute('data-testid') || el.getAttribute('data-test') || '',
-        };
-    }).filter(f =>
-        f.type !== 'hidden' &&
-        f.type !== 'submit' &&
-        f.type !== 'file' &&
-        f.type !== 'button' &&
-        f.type !== 'image' &&
-        f.type !== 'reset'
-    );
-
-    if (formFields.length === 0) return { success: false, message: "No fields found" };
-
-    console.log(`[Auto-Fill] Detected ${formFields.length} fields:`, formFields.map(f => f.label || f.name || f.id));
-
-    let userProfile: any = {};
-    try {
-        const stored = await chrome.storage.local.get(['userProfile']);
-        userProfile = stored.userProfile || {};
-    } catch (e) {
-        console.log("No stored profile, using empty");
-    }
+    const storage = getStorage();
+    if (!storage) return { success: false, error: "Context lost" };
 
     try {
-        const storedToken = (await chrome.storage.local.get(['authToken'])).authToken;
-        if (!storedToken) {
-            return { success: false, message: "Please sign in securely through the extension first." };
-        }
+        const stored = await storage.get(['userProfile', 'authToken']);
+        if (!stored.authToken) return { success: false, error: "Not authenticated" };
 
-        console.log(`🔑 [EXT] Using secure token for API call`);
         const response = await fetch(ENDPOINTS.mapFields, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${storedToken}`
+                'Authorization': `Bearer ${stored.authToken}`
             },
             body: JSON.stringify({
                 form_fields: formFields,
-                user_profile: userProfile,
+                user_profile: stored.userProfile || {},
                 project_context: projectContext
             })
         });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Backend error: ${response.status} - ${errorText}`);
-        }
-
         const data = await response.json();
-        const fieldMappings = data.field_mappings || {};
+        const mappings = data.field_mappings || {};
 
-        let filledCount = 0;
-        for (const [selector, value] of Object.entries(fieldMappings)) {
-            // CRITICAL FIX: Validate selector before using querySelector
-            // The AI sometimes returns URLs or invalid strings as "selectors"
-            if (!selector ||
-                selector.startsWith('http') ||
-                selector.startsWith('www.') ||
-                selector.includes('://') ||
-                (!selector.startsWith('#') && !selector.startsWith('.') && !selector.startsWith('[') && !selector.match(/^[a-zA-Z]/))) {
-                console.warn(`[Auto-Fill] Invalid selector skipped: "${selector}"`);
-                continue;
-            }
-
+        for (const [selector, value] of Object.entries(mappings)) {
             try {
                 const el = document.querySelector(selector) as HTMLInputElement;
                 if (el && value) {
-                    if (el.type === 'file') continue;
-
                     el.value = String(value);
                     el.dispatchEvent(new Event('input', { bubbles: true }));
-                    el.dispatchEvent(new Event('change', { bubbles: true }));
-                    filledCount++;
-
-                    // FIXED: Use outline instead of background to avoid readability issues on dark themes
-                    el.style.outline = "2px solid #22c55e";
-                    el.style.outlineOffset = "1px";
-                    // Reset after 3 seconds
-                    setTimeout(() => {
-                        el.style.outline = "";
-                        el.style.outlineOffset = "";
-                    }, 3000);
                 }
-            } catch (selectorError) {
-                console.warn(`[Auto-Fill] querySelector failed for "${selector}":`, selectorError);
-            }
+            } catch (e) { }
         }
-
-        return { success: true, filled: filledCount };
-
+        return { success: true };
     } catch (error) {
-        console.error("Auto-Fill Failed:", error);
         return { success: false, error: String(error) };
     }
 }
 
-// ===== SIDE PANEL TRIGGER (PULSE ICON) =====
-if (document.body.innerText.toLowerCase().includes('scholarship') ||
-    document.body.innerText.toLowerCase().includes('hackathon') ||
-    document.body.innerText.toLowerCase().includes('grant') ||
-    window.location.hostname.includes('devpost') ||
-    window.location.hostname.includes('dorahacks') ||
-    window.location.hostname.includes('mlh') ||
-    window.location.hostname.includes('taikai')) {
-
+// Initialization icon (restricted to scholarship pages)
+if (document.body.innerText.match(/scholarship|hackathon|grant|devpost|dorahacks/i)) {
     const icon = document.createElement('div');
     icon.id = 'scholarstream-pulse-icon';
-    icon.style.cssText = `
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-      z-index: 9999;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform 0.2s;
-      background: transparent;
-    `;
-
+    icon.style.cssText = `position:fixed;bottom:20px;right:20px;width:60px;height:60px;z-index:9999;cursor:pointer;`;
     const img = document.createElement('img');
-    img.src = chrome.runtime.getURL("assets/ss_logo.png");
-    img.style.width = "100%";
-    img.style.height = "100%";
-    img.style.objectFit = "cover";
-    img.style.borderRadius = "50%";
+    img.src = isExtensionValid() ? chrome.runtime.getURL("assets/ss_logo.png") : "";
+    img.style.cssText = "width:100%;height:100%;border-radius:50%;";
     icon.appendChild(img);
-
-    icon.onclick = () => {
-        console.log("Pulse Clicked - Requesting Side Panel Open");
-        safeSendMessage({ type: 'OPEN_SIDE_PANEL' });
-    };
-
+    icon.onclick = () => safeSendMessage({ type: 'OPEN_SIDE_PANEL' });
     document.body.appendChild(icon);
 }
+

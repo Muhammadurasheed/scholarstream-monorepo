@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Upload, Sparkles, User, Bot, Mic, MicOff, FileText, LogIn, AlertCircle, CheckCircle2, Circle, Globe, X, Loader2, RefreshCw, Plus, AtSign, Trash2, ChevronDown, ChevronUp, ToggleLeft, ToggleRight } from 'lucide-react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { Send, Sparkles, User, Bot, Mic, MicOff, FileText, LogIn, CheckCircle2, Circle, Globe, X, Loader2, RefreshCw, Plus, ChevronDown, ChevronUp, ToggleLeft, ToggleRight } from 'lucide-react';
+
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../utils/firebase';
-import { ENDPOINTS, detectPlatform, calculateProfileCompleteness, parseDocument, generateDocumentId, type ContextStatus, type UploadedDocument } from '../config';
+import { ENDPOINTS, detectPlatform, calculateProfileCompleteness, parseDocument, generateDocumentId, getStorage, type ContextStatus, type UploadedDocument } from '../config';
 import { MarkdownMessage } from './MarkdownMessage';
 
 interface Message {
@@ -34,7 +34,6 @@ export default function App() {
 
     // Multi-document state
     const [documentStore, setDocumentStore] = useState<DocumentStore>({ documents: [], activeDocIds: [] });
-    const [showDocSelector, setShowDocSelector] = useState(false);
     const [mentionFilter, setMentionFilter] = useState('');
 
     // Knowledge base settings - FAANG-level control
@@ -42,7 +41,6 @@ export default function App() {
         useProfileAsKnowledge: true,  // Default: include profile
         autoProfileWhenNoDocs: true,  // Auto-include when no docs mentioned
     });
-    const [mentionedDocIds, setMentionedDocIds] = useState<string[]>([]); // Tracks @ mentioned docs per message
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -50,13 +48,8 @@ export default function App() {
     const [showMentionDropdown, setShowMentionDropdown] = useState(false);
     const [mentionCursorPos, setMentionCursorPos] = useState(0);
 
-    // Auth State
     const [authToken, setAuthToken] = useState<string | null>(null);
     const [userProfile, setUserProfile] = useState<any>(null);
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [authError, setAuthError] = useState('');
-    const [authLoading, setAuthLoading] = useState(false);
 
     // Context Status (Enhanced for Phase 2)
     const [contextStatus, setContextStatus] = useState<ContextStatus>({
@@ -80,7 +73,10 @@ export default function App() {
 
     // Check for existing token, profile, documents, and KB settings on mount
     useEffect(() => {
-        chrome.storage.local.get(['authToken', 'userProfile', 'documentStore', 'kbSettings'], (result) => {
+        const storage = getStorage();
+        if (!storage) return;
+
+        storage.get(['authToken', 'userProfile', 'documentStore', 'kbSettings'], (result) => {
             if (result.authToken) {
                 setAuthToken(result.authToken);
             }
@@ -124,8 +120,52 @@ export default function App() {
                 }
             }
         };
-        chrome.storage.onChanged.addListener(listener);
-        return () => chrome.storage.onChanged.removeListener(listener);
+
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+            chrome.storage.onChanged.addListener(listener);
+            return () => chrome.storage.onChanged.removeListener(listener);
+        }
+    }, []);
+
+    // NEW: FAANG-grade Token Heartbeat & Zero-Touch Sync
+    // Continuously check for token if we don't have one (Zero-Touch optimization)
+    useEffect(() => {
+        if (authToken) return;
+
+        const checkToken = () => {
+            const storage = getStorage();
+            if (!storage) return;
+
+            storage.get(['authToken'], (result) => {
+                if (result.authToken && result.authToken !== authToken) {
+                    console.log('✨ [EXT] Zero-Touch: Auth token detected via heartbeat');
+                    setAuthToken(result.authToken);
+                }
+            });
+        };
+
+        const interval = setInterval(checkToken, 2000); // 2s heartbeat for instant unlock
+        return () => clearInterval(interval);
+    }, [authToken]);
+
+    // FAANG-grade Token Refresh Logic
+    useEffect(() => {
+        const unsubscribe = auth.onIdTokenChanged(async (user: any) => {
+            if (user) {
+                const token = await user.getIdToken();
+                const storage = getStorage();
+                if (storage) {
+                    await storage.set({ authToken: token });
+                    setAuthToken(token);
+                    console.log('🔄 [EXT] Auth token refreshed automatically');
+                }
+            } else {
+                // Only clear if we explicitly don't have a user
+                // This prevents flickering during rapid refreshes
+                // setAuthToken(null);
+            }
+        });
+        return () => unsubscribe();
     }, []);
 
     // Detect platform when tab changes
@@ -164,7 +204,8 @@ export default function App() {
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
                 if (userDoc.exists()) {
                     const profileData = userDoc.data();
-                    await chrome.storage.local.set({ userProfile: profileData });
+                    const storage = getStorage();
+                    if (storage) await storage.set({ userProfile: profileData });
                     setUserProfile(profileData);
                     setContextStatus(prev => ({
                         ...prev,
@@ -184,45 +225,7 @@ export default function App() {
         }
     };
 
-    // Handle Login Logic
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setAuthError('');
-        setAuthLoading(true);
 
-        try {
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-            const token = await user.getIdToken();
-
-            // 1. Sync Token
-            await chrome.storage.local.set({ authToken: token });
-            setAuthToken(token);
-
-            // 2. Fetch & Sync User Profile (Knowledge Base)
-            try {
-                const userDoc = await getDoc(doc(db, 'users', user.uid));
-                if (userDoc.exists()) {
-                    const profileData = userDoc.data();
-                    await chrome.storage.local.set({ userProfile: profileData });
-                    setUserProfile(profileData);
-                    setContextStatus(prev => ({
-                        ...prev,
-                        profileCompleteness: calculateProfileCompleteness(profileData)
-                    }));
-                    console.log("[EXT] Profile Synced:", profileData);
-                }
-            } catch (profileErr) {
-                console.error("[EXT] Failed to sync profile:", profileErr);
-            }
-
-        } catch (error: any) {
-            console.error("Login Failed:", error);
-            setAuthError(error.message || "Invalid credentials");
-        } finally {
-            setAuthLoading(false);
-        }
-    };
 
     // Voice Handler (Web Speech API)
     const toggleVoice = () => {
@@ -321,7 +324,8 @@ export default function App() {
         setDocumentStore(updatedStore);
 
         // Persist to storage
-        await chrome.storage.local.set({ documentStore: updatedStore });
+        const storage = getStorage();
+        if (storage) await storage.set({ documentStore: updatedStore });
 
         const totalChars = updatedStore.documents.reduce((sum, d) => sum + d.charCount, 0);
         setContextStatus(prev => ({
@@ -350,7 +354,8 @@ export default function App() {
             activeDocIds: documentStore.activeDocIds.filter(id => id !== docId),
         };
         setDocumentStore(updatedStore);
-        await chrome.storage.local.set({ documentStore: updatedStore });
+        const storage = getStorage();
+        if (storage) await storage.set({ documentStore: updatedStore });
 
         const totalChars = updatedStore.documents.reduce((sum, d) => sum + d.charCount, 0);
         setContextStatus(prev => ({
@@ -466,13 +471,16 @@ export default function App() {
 
             // CRITICAL: Store the last mentioned docs so sparkle can use ONLY these
             // This syncs the chat KB selection with sparkle button behavior
-            await chrome.storage.local.set({
-                lastMentionedDocs: mentionedDocs.map(d => ({ id: d.id, filename: d.filename })),
-                lastKbSettings: {
-                    includeProfile,
-                    hasMentionedDocs: mentionedDocs.length > 0
-                }
-            });
+            const storage = getStorage();
+            if (storage) {
+                await storage.set({
+                    lastMentionedDocs: mentionedDocs.map(d => ({ id: d.id, filename: d.filename })),
+                    lastKbSettings: {
+                        includeProfile,
+                        hasMentionedDocs: mentionedDocs.length > 0
+                    }
+                });
+            }
             console.log(`[KB] Stored last mentioned docs for sparkle sync:`, mentionedDocs.map(d => d.filename));
 
             const response = await fetch(ENDPOINTS.chat, {
@@ -599,7 +607,7 @@ export default function App() {
 
                     <div className="space-y-3 pt-4">
                         <button
-                            onClick={() => window.open('http://localhost:8080/auth', '_blank')}
+                            onClick={() => window.open('http://localhost:8080/login', '_blank')}
                             className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl transition-all flex justify-center items-center gap-2 shadow-lg shadow-blue-900/20 group hover:shadow-blue-500/25 active:scale-95"
                         >
                             <span>Launch Web App</span>
@@ -618,10 +626,13 @@ export default function App() {
                     </div>
 
                     <div className="pt-8 border-t border-slate-900/50">
-                        <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
-                            <div className="w-2 h-2 rounded-full bg-blue-500/50 animate-pulse"></div>
-                            Waiting for secure handshake...
+                        <div className="flex items-center justify-center gap-2 text-xs text-slate-500 italic">
+                            <Loader2 className="w-3 h-3 animate-spin text-blue-500" />
+                            Synchronizing secure handshake...
                         </div>
+                        <p className="text-[10px] text-slate-600 text-center mt-2">
+                            Zero-Touch Auth Active
+                        </p>
                     </div>
                 </div>
             </div>
@@ -648,7 +659,8 @@ export default function App() {
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => {
-                            chrome.storage.local.remove(['authToken', 'userProfile']);
+                            const storage = getStorage();
+                            if (storage) storage.remove(['authToken', 'userProfile']);
                             setAuthToken(null);
                             setUserProfile(null);
                         }}
@@ -761,7 +773,8 @@ export default function App() {
                                         onClick={() => {
                                             const newSettings = { ...kbSettings, useProfileAsKnowledge: !kbSettings.useProfileAsKnowledge };
                                             setKbSettings(newSettings);
-                                            chrome.storage.local.set({ kbSettings: newSettings }); // Persist
+                                            const storage = getStorage();
+                                            if (storage) storage.set({ kbSettings: newSettings }); // Persist
                                         }}
                                         className="focus:outline-none"
                                         title={kbSettings.useProfileAsKnowledge ? "Profile will be used as knowledge base alongside mentioned docs" : "Only mentioned docs will be used"}

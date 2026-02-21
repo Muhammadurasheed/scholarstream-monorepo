@@ -2,6 +2,7 @@
 Google Gemini AI Service
 Handles AI-powered scholarship enrichment and matching
 """
+import os
 import google.generativeai as genai
 from typing import Dict, List, Optional, Any
 import json
@@ -38,29 +39,39 @@ class GeminiAIService:
     
     def __init__(self):
         """Initialize Gemini AI with Upstash Redis support and Vertex AI/API Key fallback"""
-        # Try initializing Vertex AI first (Enterprise/Production path)
         self.use_vertex = False
-        try:
-            import vertexai
-            from vertexai.generative_models import GenerativeModel
-            import google.auth
-            from google.auth.exceptions import DefaultCredentialsError
-
-            # STRICT CHECK: Only use Vertex if we have actual Google Cloud credentials (ADC)
-            # attempting to use Vertex SDK with just an API key often fails or warns about gRPC
+        
+        # FAANG-grade: Allow forcing standard SDK via env (useful for specific API keys)
+        force_standard = os.getenv("FORCE_GEMINI_SDK", "false").lower() == "true"
+        
+        if not force_standard:
             try:
-                credentials, project = google.auth.default()
-                vertexai.init(project=project, location="us-central1")
-                self.model = GenerativeModel(settings.gemini_model)
-                self.use_vertex = True
-                logger.info("Vertex AI initialized successfully", mode="enterprise_adc")
-            except DefaultCredentialsError:
-                logger.warning("No Google Cloud ADC found. Vertex AI SDK skipped. Falling back to Standard SDK.")
-                raise Exception("No ADC")
+                import vertexai
+                from vertexai.generative_models import GenerativeModel
+                import google.auth
+                from google.auth.exceptions import DefaultCredentialsError
 
-        except Exception as e:
-            logger.warning(f"Vertex AI initialization skipped: {e}. Falling back to API Key.")
-            
+                # STRICT CHECK: Only use Vertex if we have actual Google Cloud credentials (ADC)
+                try:
+                    credentials, project = google.auth.default()
+                    vertexai.init(project=project, location="us-central1")
+                    self.model = GenerativeModel(settings.gemini_model)
+                    self.use_vertex = True
+                    logger.info("Vertex AI initialized successfully", mode="enterprise_adc")
+                except DefaultCredentialsError:
+                    logger.warning("No Google Cloud ADC found. Vertex AI SDK skipped.")
+                    raise Exception("No ADC")
+                except Exception as ve:
+                    logger.warning(f"Vertex AI specific error: {ve}. Falling back.")
+                    raise ve
+
+            except Exception as e:
+                logger.warning(f"Vertex AI initialization skipped or failed: {e}. Falling back to API Key.")
+        else:
+            logger.info("Standard Gemini SDK forced via environment variable.")
+
+        # Standard SDK Fallback/Initialization
+        if not self.use_vertex:
             if not settings.gemini_api_key:
                 logger.error("No Vertex AI credentials AND no GEMINI_API_KEY found.")
                 raise Exception("Missing AI credentials")

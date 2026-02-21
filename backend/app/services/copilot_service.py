@@ -279,9 +279,18 @@ You are an elite AI agent with deep expertise in: {platform_persona.get('experti
                 "platform": platform_persona['name']
             }
         except Exception as e:
-            logger.error("Copilot chat failed", error=str(e))
+            error_msg = str(e)
+            logger.error("Copilot chat failed", error=error_msg)
+            
+            # FAANG-grade: Return actionable hints for specific failures
+            hint = "I'm having trouble connecting to my brain right now."
+            if "429" in error_msg or "quota" in error_msg.lower():
+                hint = "My brain is a bit overwhelmed (Rate Limit). Please try again in a few seconds."
+            elif "403" in error_msg:
+                hint = "I'm having trouble accessing my intelligence core (Auth/Key issue)."
+            
             return {
-                "message": "I'm having trouble connecting to my brain right now. Please try again in a moment.",
+                "message": f"{hint} (Ref: {error_msg[:50]})",
                 "action": None,
                 "platform": platform_persona['name']
             }

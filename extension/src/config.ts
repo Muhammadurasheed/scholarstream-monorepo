@@ -4,8 +4,9 @@
  */
 
 // API Configuration
-export const API_URL = 'https://scholarstream-backend-opdnpd6bsq-uc.a.run.app';
-// export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+// FAANG-grade: Prioritize environment variables, fallback to local development
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+// export const API_URL = 'https://scholarstream-backend-opdnpd6bsq-uc.a.run.app';
 
 // Derived API endpoints
 export const ENDPOINTS = {
@@ -173,4 +174,35 @@ export async function parseDocument(
  */
 export function generateDocumentId(): string {
   return `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * FAANG-grade Resilience: Context Safety Helpers
+ * Prevents "Extension context invalidated" crashes
+ */
+
+/**
+ * Check if the extension runtime is still valid
+ */
+export function isExtensionValid(): boolean {
+  return typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
+}
+
+/**
+ * Get a safe reference to chrome.storage.local
+ * Returns null if context is lost, preventing "Cannot read properties of undefined (reading 'local')"
+ */
+export function getStorage() {
+  if (!isExtensionValid()) {
+    console.warn("[ScholarStream] Extension context lost. Please refresh the page.");
+    return null;
+  }
+
+  // EXTRA RIGOR: Check chrome.storage existence explicitly
+  if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
+    console.warn("[ScholarStream] Storage API unavailable. Context may be invalid.");
+    return null;
+  }
+
+  return chrome.storage.local;
 }
