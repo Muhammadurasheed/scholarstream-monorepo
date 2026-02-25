@@ -231,18 +231,50 @@ export const normalizeApplyUrl = (url: string | undefined): string => {
     // -------------------------
     // DevPost
     // -------------------------
+    // Pattern 1: /hackathons/<slug>/ or /hackathons/<slug>
     // Broken: https://devpost.com/hackathons/<slug>/
     // Working (canonical): https://<slug>.devpost.com/
     if (hostname === 'devpost.com') {
-      const m = pathname.match(/^\/hackathons\/([^\/]+)\/?$/i);
+      // Match /hackathons/<slug> with possible trailing slash, query params, anchors
+      const m = pathname.match(/^\/hackathons\/([a-zA-Z0-9_-]+)\/?/i);
+
+      // Also catch query param style if any: /hackathons?search=...
       if (m?.[1]) {
         const slug = m[1];
         return `https://${slug}.devpost.com/`;
       }
+
+      // Match /software/<slug> (DevPost project pages)
+      const softwareMatch = pathname.match(/^\/software\/([a-zA-Z0-9_-]+)\/?/i);
+      if (softwareMatch?.[1]) {
+        return urlString; // /software/ pages are valid on devpost.com
+      }
+
+      // If it's just /hackathons or /hackathons/ with no slug → generic listing
+      // We return this and let OpportunityCard handle the Google fallback
+      return urlString;
     }
 
     // Keep DevPost subdomain URLs as-is (these are usually the correct landing pages).
-    if (hostname.endsWith('.devpost.com') || hostname === 'devpost.com') {
+    if (hostname.endsWith('.devpost.com')) {
+      return urlString;
+    }
+
+    // -------------------------
+    // Unstop (Indian/Global Ecosystem)
+    // -------------------------
+    // Patterns: 
+    // - unstop.com/hackathons/slug
+    // - unstop.com/competitions/slug
+    // - unstop.com/o/slug
+    if (hostname === 'unstop.com') {
+      // If it's a specific opportunity page, it should have a slug after the category
+      const unstopMatch = pathname.match(/^\/(?:hackathons|competitions|o|conferences|quizzes|hiring-challenges)\/([a-zA-Z0-9_-]+)\/?/i);
+      if (unstopMatch?.[1]) {
+        return `https://unstop.com/o/${unstopMatch[1]}`; // Canonical format
+      }
+
+      // Generic listing: unstop.com/hackathons
       return urlString;
     }
 

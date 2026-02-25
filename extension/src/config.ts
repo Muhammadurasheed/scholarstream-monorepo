@@ -4,9 +4,8 @@
  */
 
 // API Configuration
-// FAANG-grade: Prioritize environment variables, fallback to local development
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081';
-// export const API_URL = 'https://scholarstream-backend-opdnpd6bsq-uc.a.run.app';
+// Production-first: Default to Cloud Run backend, override with VITE_API_URL for local dev
+export const API_URL = import.meta.env.VITE_API_URL || 'https://scholarstream-backend-1086434452502.us-central1.run.app';
 
 // Derived API endpoints
 export const ENDPOINTS = {
@@ -21,29 +20,64 @@ export const ENDPOINTS = {
 // WebSocket URL (derived from API URL)
 export const WS_URL = API_URL.replace('http', 'ws') + '/ws/opportunities';
 
-// Platform detection patterns
+// Platform detection patterns - FAANG-grade coverage (20+ domains)
 export const PLATFORM_PATTERNS = {
+  // Hackathons & Competitions
   devpost: /devpost\.com/i,
+  devfolio: /devfolio\.co/i,
   dorahacks: /dorahacks\.io/i,
-  mlh: /mlh\.io/i,
-  hackathon: /hackathon|hack\s*a\s*thon/i,
-  scholarship: /scholarship|grant|fellowship/i,
-  bounty: /bounty|bug\s*bounty|intigriti|hackerone/i,
   taikai: /taikai\.network/i,
+  mlh: /mlh\.io/i,
+  lablab: /lablab\.ai/i,
+  hackquest: /hackquest\.io/i,
+  bemyapp: /bemyapp\.com/i,
+
+  // Scholarships & Grants
+  bold: /bold\.org/i,
+  scholarships: /scholarship\.com|fastweb\.com|cappex\.com|chegg\.com/i,
+  grant: /grant|fellowship|funding/i,
+
+  // Technical & Developer Platforms
+  github: /github\.com/i,
+  hackerone: /hackerone\.com/i,
+  bugcrowd: /bugcrowd\.com/i,
+  hackerrank: /hackerrank\.com/i,
+  leetcode: /leetcode\.com/i,
+  coderbyte: /coderbyte\.com/i,
+
+  // Jobs & Professional
+  linkedin: /linkedin\.com\/jobs|linkedin\.com\/hiring/i,
+  greenhouse: /boards\.greenhouse\.io/i,
+  lever: /jobs\.lever\.co/i,
+  indeed: /indeed\.com/i,
+
+  // Generic Catch-alls
+  hackathon: /hackathon|hack\s*a\s*thon/i,
+  scholarship: /scholarship/i,
 };
 
 /**
- * Detect the platform from a URL
+ * Detect the platform from a URL with Distinguished Engineer precision
  */
 export function detectPlatform(url: string): string {
   if (PLATFORM_PATTERNS.devpost.test(url)) return 'DevPost';
+  if (PLATFORM_PATTERNS.devfolio.test(url)) return 'Devfolio';
   if (PLATFORM_PATTERNS.dorahacks.test(url)) return 'DoraHacks';
-  if (PLATFORM_PATTERNS.mlh.test(url)) return 'MLH';
   if (PLATFORM_PATTERNS.taikai.test(url)) return 'Taikai';
-  if (PLATFORM_PATTERNS.bounty.test(url)) return 'Bug Bounty';
-  if (PLATFORM_PATTERNS.scholarship.test(url)) return 'Scholarship';
+  if (PLATFORM_PATTERNS.lablab.test(url)) return 'LabLab.ai';
+  if (PLATFORM_PATTERNS.hackquest.test(url)) return 'HackQuest';
+  if (PLATFORM_PATTERNS.mlh.test(url)) return 'MLH';
+  if (PLATFORM_PATTERNS.github.test(url)) return 'GitHub';
+  if (PLATFORM_PATTERNS.hackerone.test(url)) return 'HackerOne';
+  if (PLATFORM_PATTERNS.hackerrank.test(url)) return 'HackerRank';
+  if (PLATFORM_PATTERNS.leetcode.test(url)) return 'LeetCode';
+  if (PLATFORM_PATTERNS.linkedin.test(url)) return 'LinkedIn';
+  if (PLATFORM_PATTERNS.scholarships.test(url)) return 'Scholarships.com';
+  if (PLATFORM_PATTERNS.bold.test(url)) return 'Bold.org';
+  if (PLATFORM_PATTERNS.grant.test(url)) return 'Grant Portal';
   if (PLATFORM_PATTERNS.hackathon.test(url)) return 'Hackathon';
-  return 'Unknown';
+  if (PLATFORM_PATTERNS.scholarship.test(url)) return 'Scholarship';
+  return 'Web Framework'; // Default to a more professional 'Web Framework' instead of 'Unknown'
 }
 
 /**

@@ -137,19 +137,33 @@ class FirebaseDB:
             raise
     
     async def get_all_scholarships(self) -> List[Scholarship]:
-        """Fetch all scholarships from cache"""
+        """Fetch all scholarships, filtering out expired ones"""
         try:
             docs = self.db.collection('scholarships').stream()
             scholarships = []
+            now = datetime.now()
+            expired_count = 0
             
             for doc in docs:
                 try:
-                    scholarships.append(Scholarship(**doc.to_dict()))
+                    s = Scholarship(**doc.to_dict())
+                    
+                    # Filter expired opportunities
+                    if s.deadline:
+                        try:
+                            deadline_dt = datetime.fromisoformat(s.deadline.replace('Z', '+00:00'))
+                            if deadline_dt.date() < now.date():
+                                expired_count += 1
+                                continue  # Skip expired
+                        except (ValueError, TypeError):
+                            pass  # Keep if date is unparseable
+                    
+                    scholarships.append(s)
                 except Exception as parse_error:
                     logger.warning("Failed to parse scholarship", doc_id=doc.id, error=str(parse_error))
                     continue
             
-            logger.info("Fetched scholarships", count=len(scholarships))
+            logger.info("Fetched scholarships", count=len(scholarships), expired_filtered=expired_count)
             return scholarships
         except Exception as e:
             logger.error("Failed to fetch all scholarships", error=str(e))

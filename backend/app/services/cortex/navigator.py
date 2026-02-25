@@ -23,15 +23,15 @@ class Sentinel:
     EXPANDED: Added more hackathon platforms, bounties, and grants
     """
     TARGETS = [
-        # ======== HACKATHONS (Global) ========
-        "https://devpost.com/hackathons",
-        "https://mlh.io/seasons/2026/events",
+    # ======== HACKATHONS (Global) ========
+    # "https://devpost.com/hackathons", # REMOVED: using DevPostDeepScraper
+    "https://mlh.io/seasons/2026/events",
         "https://angelhack.com/events/",
         "https://www.hackquest.io/hackathons",
         "https://devfolio.co/hackathons",
         "https://hackerearth.com/challenges/",
         "https://lablab.ai/event",  # AI Hackathons
-        "https://unstop.com/hackathons",  # Indian ecosystem but global
+        # "https://unstop.com/hackathons",  # Indian ecosystem but global - REMOVED: using UnstopDeepScraper
         "https://hackathon.io/events",  # Hackathon aggregator
         "https://taikai.network/hackathons",
         "https://www.bemyapp.com/events/",

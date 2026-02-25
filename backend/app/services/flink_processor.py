@@ -161,6 +161,22 @@ class CortexFlinkProcessor:
         event['id'] = content_id  # Assign stable ID
         event['cortex_processed_at'] = now
         
+        # EXPIRY GATE: Reject expired opportunities at intake
+        deadline_str = event.get('deadline', '')
+        deadline_ts = event.get('deadline_timestamp')
+        if deadline_ts and int(deadline_ts) < int(now):
+            logger.debug("Expired opportunity rejected at intake", content_id=content_id[:8])
+            return None
+        if deadline_str and not deadline_ts:
+            try:
+                from datetime import datetime as dt
+                parsed = dt.fromisoformat(deadline_str.replace('Z', '+00:00'))
+                if parsed.timestamp() < now:
+                    logger.debug("Expired opportunity rejected at intake (string deadline)", content_id=content_id[:8])
+                    return None
+            except (ValueError, TypeError):
+                pass
+        
         # Standardize 'name' (New Schema Compliance)
         if 'name' not in event and 'title' in event:
             event['name'] = event['title']
@@ -176,21 +192,20 @@ class CortexFlinkProcessor:
             )
         
         # CRITICAL: Construct URL from platform + slug if still missing
+        # ONLY use actual scraper-provided slugs, never title-derived approximations
         if not event.get('source_url'):
             platform = str(event.get('source', '')).lower()
             slug = event.get('slug') or event.get('handle') or ''
-            name = event.get('name') or event.get('title') or ''
-            url_slug = slug or name.lower().replace(' ', '-').replace("'", "")[:50]
             
-            if url_slug:
+            if slug:
                 if 'devpost' in platform:
-                    event['source_url'] = f"https://{url_slug}.devpost.com/"
+                    event['source_url'] = f"https://{slug}.devpost.com/"
                 elif 'dorahacks' in platform:
-                    event['source_url'] = f"https://dorahacks.io/hackathon/{url_slug}"
+                    event['source_url'] = f"https://dorahacks.io/hackathon/{slug}"
                 elif 'superteam' in platform or 'earn' in platform:
-                    event['source_url'] = f"https://earn.superteam.fun/listings/{url_slug}"
+                    event['source_url'] = f"https://earn.superteam.fun/listings/{slug}"
                 elif 'hackquest' in platform:
-                    event['source_url'] = f"https://hackquest.io/events/{url_slug}"
+                    event['source_url'] = f"https://hackquest.io/events/{slug}"
                     
             if event.get('source_url'):
                 logger.info("Constructed source_url from platform/slug", 

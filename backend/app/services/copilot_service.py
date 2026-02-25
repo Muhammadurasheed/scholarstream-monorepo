@@ -151,13 +151,23 @@ class CopilotService:
         platform_persona = self._detect_platform(page_url)
         
         # V2: Build knowledge base section based on what's provided
-        has_project_docs = project_context and len(project_context.strip()) > 50
+        # Sanitize project context from internal placeholders or errors
+        sanitized_context = project_context or ""
+        error_placeholders = ["[PDF content", "[DOCX content", "please install"]
+        if any(p in sanitized_context for p in error_placeholders):
+            logger.warning("Sanitizing project context: Removing placeholders")
+            for p in error_placeholders:
+                # Remove lines containing placeholders
+                lines = sanitized_context.split('\n')
+                sanitized_context = '\n'.join([l for l in lines if p not in l])
+
+        has_project_docs = sanitized_context and len(sanitized_context.strip()) > 50
         
         # Log KB state for debugging
         logger.info(
             "Copilot chat KB state",
             has_project_docs=has_project_docs,
-            project_context_length=len(project_context) if project_context else 0,
+            project_context_length=len(sanitized_context) if sanitized_context else 0,
             mentioned_docs=mentioned_docs,
             include_profile=include_profile,
             has_user_profile=bool(user_profile)
@@ -168,24 +178,24 @@ class CopilotService:
         if has_project_docs:
             if mentioned_docs and len(mentioned_docs) > 0:
                 doc_section = f"""✅ **EXPLICITLY MENTIONED DOCUMENTS** ({len(mentioned_docs)} docs): {', '.join(mentioned_docs)}
-
+ 
 ⚠️ CRITICAL: YOU MUST USE THIS DOCUMENT CONTENT BELOW TO ANSWER THE USER'S QUESTION.
 DO NOT MAKE UP INFORMATION. USE THE ACTUAL CONTENT PROVIDED HERE:
-
+ 
 === BEGIN DOCUMENT CONTENT ===
-{project_context}
+{sanitized_context}
 === END DOCUMENT CONTENT ===
-
+ 
 If the user is asking you to fill a field or help with an application, extract specific details 
 from the document content above (names, skills, experiences, projects) and use them verbatim."""
             else:
                 doc_section = f"""✅ DOCUMENTS AVAILABLE (Use this content):
-
+ 
 === BEGIN DOCUMENT CONTENT ===
-{project_context}
+{sanitized_context}
 === END DOCUMENT CONTENT ==="""
         else:
-            doc_section = "❌ No documents provided. Suggest user upload their resume/project README using the + button."
+            doc_section = "❌ No valid project documents found. Suggest user upload their resume/project README using the + button."
         
         # Build profile section
         profile_section = ""
@@ -331,47 +341,56 @@ You are an elite AI agent with deep expertise in: {platform_persona.get('experti
         
         constraint_text = "\n".join(constraints) if constraints else "No specific length constraints."
         
+        # Apple-grade Formatting Directives
+        format_guardrail = ""
+        if field_format == 'markdown':
+            format_guardrail = """
+📑 FORMATTING (MARKDOWN):
+- Use "Magazine-Quality" Markdown.
+- Employ Bold tags (**bold**) for highlighting key technical terms or impact metrics.
+- Use Bulleted lists for clarity if multiple items are listed.
+- Ensure balanced whitespace and professional paragraph breaks.
+"""
+        else:
+            format_guardrail = """
+🚫 FORMATTING (STRICT PLAIN TEXT - ZERO-MD POLICY):
+- DO NOT use any markdown symbols. NO asterisks (**), NO hashes (#), NO backticks (`), NO underscores (_).
+- Use only standard capitalization and punctuation for emphasis.
+- Ensure perfect, clean typography.
+"""
+
         prompt = f"""
-You are the "{platform_persona['name']}" Sparkle Engine for ScholarStream.
-A student needs help filling a specific form field on {platform_persona['name']}.
+You are the "{platform_persona['name']}" Einstein-Socrates Engine for ScholarStream. 
+Your purpose is to draft "Distinguished Engineer" grade content for application fields.
 
-=== TRI-FOLD KNOWLEDGE BASE ===
+=== TRIAD KNOWLEDGE BASE ===
 
-1️⃣ USER PROFILE (Who they are):
-{json.dumps(user_profile, indent=2) if user_profile else "Not provided - use generic professional tone"}
+1️⃣ PORTFOLIO (User Background):
+{json.dumps(user_profile, indent=2) if user_profile else "Not provided - focus on project context."}
 
-2️⃣ PROJECT CONTEXT (What they're working on):
-{project_context[:20000] if project_context else "No project document uploaded. Generate helpful content based on profile."}
+2️⃣ VERACITY SOURCE (Project Context):
+{project_context[:25000] if project_context else "No project document provided. Draft compelling content using the profile."}
 
-3️⃣ FIELD CONTEXT (What to fill):
-- Field Type: {field_category.replace('_', ' ').title()}
-- Label: {target_field.get('label')}
-- Name/ID: {target_field.get('name')} / {target_field.get('id')}
-- Placeholder: {target_field.get('placeholder')}
-- Input Type: {target_field.get('type')}
-- Platform: {platform_persona['name']}
-- Surrounding Context: {target_field.get('surroundingContext', target_field.get('surroundingText', ''))}
+3️⃣ INSTRUCTIONAL INTENT:
+{instruction or "Draft a high-impact response for this field."}
 
-=== CONSTRAINTS ===
-{constraint_text}
+=== FIELD SPECIFICS ===
+- Category: {field_category.replace('_', ' ').title()}
+- Label/Context: {target_field.get('label')} | {target_field.get('surroundingContext', '')}
+- Constraints: {constraint_text}
+{format_guardrail}
 
-=== ADDITIONAL INSTRUCTIONS ===
-{instruction or "Fill this field with compelling, relevant content based on the knowledge base above."}
+=== DISTINGUISHED ENGINE DIRECTIVES ===
+1. EINSTEIN GROUNDING: Your response MUST be a direct derivation of the VERACITY SOURCE. Use EXACT high-fidelity terms (e.g., "Confluent Flink", "Vertex AI").
+2. ZERO HALLUCINATION: If a fact is not in the Triad KB, do NOT invent it. Bridge gaps with professional logic.
+3. SOCRATIC INTENT: Answer the *intent* of the question. For "Challenges", narrate a journey of technical resilience.
+4. APPLE-GRADE QUALITY: The content must feel premium, organic, and human-centric. Avoid AI-sounding fluff. Focus on concrete impact.
 
-=== PLATFORM TIPS ===
-{chr(10).join(f"• {tip}" for tip in platform_persona.get('tips', [])[:2])}
-
-=== YOUR TASK ===
-1. Analyze what this "{field_category}" field needs based on all available context
-2. Draft HIGH-QUALITY content using SPECIFIC details from the user's profile AND project context
-3. Do NOT use generic placeholders like [YOUR PROJECT] - use actual information from the provided context
-4. Match the tone and expectations of {platform_persona['name']} reviewers/judges
-5. RESPECT character/word limits strictly if specified
-
-OUTPUT JSON (no markdown code blocks):
+=== OUTPUT SCHEMA ===
+Return ONLY a JSON object:
 {{
-  "content": "The actual text to fill in the field - ready to paste, professional quality",
-  "reasoning": "Brief explanation of how you used the profile and project context"
+  "content": "The refined, high-impact text",
+  "reasoning": "Context bridge + formatting mode used (Plain/Markdown)"
 }}
 """
         try:

@@ -5,7 +5,7 @@
  * CRITICAL: Do NOT use import.meta here. Content scripts are NOT modules
  * and the browser parser will throw a SyntaxError even on 'typeof import.meta'.
  */
-const API_URL = 'http://localhost:8081';
+const API_URL = 'https://scholarstream-backend-1086434452502.us-central1.run.app';
 const ENDPOINTS = {
     chat: `${API_URL}/api/extension/chat`,
     mapFields: `${API_URL}/api/extension/map-fields`,
@@ -562,39 +562,37 @@ class FocusEngine {
         );
 
         try {
+            const { userProfile, projectContext, instruction: kbInstruction } = await resolveDistinguishedContext(fieldContext);
             const storage = getStorage();
             if (!storage) throw new Error('Extension context invalidated');
 
-            const stored = await storage.get(['authToken', 'userProfile', 'documentStore']);
-            const authToken = stored.authToken;
-            if (!authToken) throw new Error('Not authenticated');
-
-            // Get project context from document store
-            let projectContext = '';
-            if (stored.documentStore?.documents?.length > 0) {
-                projectContext = stored.documentStore.documents
-                    .map((d: any) => `--- ${d.filename} ---\n${d.content}`)
-                    .join('\n\n');
+            // CRITICAL: Request token refresh from extension before API call
+            let authToken = (await storage.get(['authToken'])).authToken;
+            try {
+                const refreshResponse = await chrome.runtime.sendMessage({ type: 'REFRESH_TOKEN' });
+                if (refreshResponse && refreshResponse.token) {
+                    authToken = refreshResponse.token;
+                    console.log('🔄 [Sparkle] Token refreshed via background sync');
+                }
+            } catch (msgErr) {
+                console.warn('⚠️ [Sparkle] Could not request token refresh (sidepanel might be closed)', msgErr);
             }
 
+            if (!authToken) throw new Error('Not authenticated');
+
             const refinementPrompt = `TASK: Refine the following content based on user instruction.
+Maintain Distinguished Engineer standards: Absolute factual grounding, technical precision, and Socratic intent.
 
 CURRENT CONTENT:
 ${currentContent}
 
 USER INSTRUCTION: ${instruction}
 
-FIELD CONTEXT:
-- Field Type: ${fieldContext.fieldCategory}
-- Platform: ${fieldContext.platformHint}
-${fieldContext.characterLimit ? `- Character Limit: ${fieldContext.characterLimit}` : ''}
-${fieldContext.wordLimit ? `- Word Limit: ${fieldContext.wordLimit}` : ''}
+${kbInstruction}
 
 IMPORTANT:
-1. Maintain the core message and facts
-2. Apply the user's refinement instruction
-3. Keep the same approximate length unless instructed otherwise
-4. Return ONLY the refined content, no explanations`;
+1. Apply the user's specific refinement instruction while strictly adhering to the Project Context in the and Einstein Grounding rules.
+2. Return ONLY the refined content, no explanations.`;
 
             const response = await fetch(ENDPOINTS.mapFields, {
                 method: 'POST',
@@ -604,7 +602,7 @@ IMPORTANT:
                 },
                 body: JSON.stringify({
                     form_fields: [],
-                    user_profile: stored.userProfile || {},
+                    user_profile: userProfile,
                     target_field: {
                         ...fieldContext,
                         existingContent: currentContent
@@ -818,7 +816,7 @@ IMPORTANT:
                 this.hideGuidanceBubble();
             });
             document.getElementById('ss-guidance-profile')?.addEventListener('click', () => {
-                window.open('https://scholarstream-frontend-opdnpd6bsq-uc.a.run.app/profile', '_blank');
+                window.open('https://scholarstream-frontend-1086434452502.us-central1.run.app/profile', '_blank');
                 this.hideGuidanceBubble();
             });
             document.getElementById('ss-guidance-try')?.addEventListener('click', () => {
@@ -922,19 +920,30 @@ IMPORTANT:
     }
 
     private detectFormat(target: HTMLElement, combinedText: string): 'plain' | 'markdown' | 'html' {
-        // Check for markdown indicators
-        if (
-            combinedText.includes('markdown') ||
-            combinedText.includes('supports formatting') ||
+        const text = combinedText.toLowerCase();
+
+        // Advanced Markdown Detection
+        const isMarkdownSupported =
+            text.includes('markdown') ||
+            text.includes('rich text') ||
+            text.includes('supports formatting') ||
+            text.includes('latex') ||
             target.classList.contains('markdown') ||
             target.getAttribute('data-format') === 'markdown' ||
-            // DevPost submission fields typically support markdown
-            (window.location.hostname.includes('devpost') && target.tagName === 'TEXTAREA')
-        ) {
-            return 'markdown';
-        }
+            // Platform Heuristics
+            window.location.hostname.includes('devpost') ||
+            window.location.hostname.includes('dorahacks') ||
+            window.location.hostname.includes('gitcoin');
 
-        // Check for rich text editor indicators
+        // Explicit Plain Text Detection (Higher Priority if keywords found)
+        const isStrictPlain =
+            text.includes('plain text only') ||
+            text.includes('no formatting') ||
+            text.includes('no markdown') ||
+            window.location.hostname.includes('docs.google.com/forms');
+
+        if (isStrictPlain) return 'plain';
+        if (isMarkdownSupported && target.tagName === 'TEXTAREA') return 'markdown';
         if (target.isContentEditable || target.classList.contains('richtext') || target.classList.contains('wysiwyg')) {
             return 'html';
         }
@@ -1139,16 +1148,56 @@ IMPORTANT:
     }
 }
 
+/**
+ * AppleSanitizer: The "Jony Ive" of text processing
+ * Ensures perfect symmetry, typography, and sanitation.
+ */
+class AppleSanitizer {
+    static sanitize(text: string, format: 'plain' | 'markdown' | 'html'): string {
+        if (!text) return "";
+
+        let clean = text.trim();
+
+        // 1. Remove AI "Chatter" (prefixes like "Here is your response:")
+        clean = clean.replace(/^(here is|sure,|certainly|as requested).*?:/i, "").trim();
+
+        // 2. Wrap up quotes if AI added them
+        if (clean.startsWith('"') && clean.endsWith('"')) {
+            clean = clean.substring(1, clean.length - 1).trim();
+        }
+
+        // 3. Typography: Essential symmetry
+        clean = clean.replace(/ {2,}/g, " "); // No double spaces
+        clean = clean.replace(/\.{3,}/g, "..."); // Proper ellipses
+
+        // 4. Mode-Specific Sanitation
+        if (format === 'plain') {
+            // Aggressive Markdown Stripping for Plain Fields
+            clean = clean
+                .replace(/\*\*(.*?)\*\*/g, "$1") // Bold
+                .replace(/\*(.*?)\*/g, "$1")     // Italic
+                .replace(/`(.*?)`/g, "$1")       // Code
+                .replace(/^#+\s+/gm, "")         // Headers
+                .replace(/\[(.*?)\]\(.*?\)/g, "$1") // Links
+                .replace(/^- /gm, "• ");         // Prettify list dots for plain text
+        }
+
+        return clean.trim();
+    }
+}
+
 // Initialize Focus Engine
 new FocusEngine();
 
-// ========== ENHANCED API HELPER (Phase 3) ==========
-async function generateFieldContentEnhanced(
-    fieldContext: FieldContext
-) {
-    let userProfile: any = {};
-    let projectContext = "";
-
+/**
+ * Distinguished context resolution Helper - The 'Einstein' Brain
+ * Aggregates the Triad Knowledge Base: Profile, Docs, and Instructions
+ */
+async function resolveDistinguishedContext(fieldContext: FieldContext): Promise<{
+    userProfile: any;
+    projectContext: string;
+    instruction: string;
+}> {
     const storage = getStorage();
     if (!storage) throw new Error('Extension context invalidated');
 
@@ -1158,56 +1207,146 @@ async function generateFieldContentEnhanced(
             'documentStore',
             'kbSettings',
             'lastMentionedDocs',
-            'lastKbSettings'
+            'lastKbSettings',
+            'globalInstructions' // Future-proofing for system-wide prompts
         ]);
 
-        userProfile = stored.userProfile || {};
+        let userProfile = stored.userProfile || {};
         const documentStore = stored.documentStore as { documents: any[] } | undefined;
         const lastMentionedDocs = stored.lastMentionedDocs as { id: string; filename: string }[] | undefined;
         const lastKbSettings = stored.lastKbSettings as { includeProfile: boolean; hasMentionedDocs: boolean } | undefined;
 
+        let projectContext = "";
+
+        // Distinguished logic: Hierarchy of Truth
+        // 1. Explicit Mentions from Sidepanel take precedence
         if (lastMentionedDocs && lastMentionedDocs.length > 0 && documentStore?.documents) {
             const mentionedFilenames = new Set(lastMentionedDocs.map(d => d.filename.toLowerCase()));
             const mentionedDocs = documentStore.documents.filter((d: any) =>
                 mentionedFilenames.has(d.filename.toLowerCase())
             );
 
-            if (mentionedDocs.length > 0) {
-                projectContext = mentionedDocs
+            // CRITICAL: Filter out documents with empty/near-empty content
+            const usableDocs = mentionedDocs.filter((d: any) => d.content && d.content.trim().length > 50);
+            if (usableDocs.length < mentionedDocs.length) {
+                console.warn(`[Sparkle] Filtered out ${mentionedDocs.length - usableDocs.length} empty/near-empty docs from context`);
+            }
+
+            if (usableDocs.length > 0) {
+                projectContext = usableDocs
                     .map((d: any) => `--- ${d.filename} ---\n${d.content}`)
                     .join('\n\n');
             }
 
+            // Respect the profile toggle from sidepanel
             if (lastKbSettings && !lastKbSettings.includeProfile) {
                 userProfile = {};
             }
-        } else if (documentStore?.documents && documentStore.documents.length > 0) {
-            const kbSettings = stored.kbSettings as { useProfileAsKnowledge?: boolean } | undefined;
+        }
+        // 2. Global KB Settings Fallback
+        else if (documentStore?.documents && documentStore.documents.length > 0) {
+            const kbSettings = stored.kbSettings as { useProfileAsKnowledge?: boolean; autoProfileWhenNoDocs?: boolean } | undefined;
 
-            projectContext = documentStore.documents
-                .map((d: any) => `--- ${d.filename} ---\n${d.content}`)
-                .join('\n\n');
+            // CRITICAL: Only include documents with actual content
+            const usableDocs = documentStore.documents.filter((d: any) => d.content && d.content.trim().length > 50);
+            if (usableDocs.length > 0) {
+                projectContext = usableDocs
+                    .map((d: any) => `--- ${d.filename} ---\n${d.content}`)
+                    .join('\n\n');
+            } else {
+                console.warn('[Sparkle] All documents have empty content — no project context available');
+            }
 
-            if (kbSettings && kbSettings.useProfileAsKnowledge === false) {
+            if (kbSettings?.useProfileAsKnowledge === false) {
                 userProfile = {};
             }
         }
+
+        // 3. Instruction synthesis (The Socrates part)
+        let instruction = `You are a world-class application partner with Einstein-level intelligence and Socratic empathy.
+TASK: Draft exceptional, authentic content for the "${fieldContext.fieldCategory.replace('_', ' ')}" field.
+
+DISTINGUISHED GUARDRAILS:
+1. GROUNDING: Strictly derive facts from the Project Context. Do NOT hallucinate skills or project features not present in the docs.
+2. VERACITY: Use specific terminology from the provided context (e.g., "Confluent Flink", "Vertex AI") rather than generic "AI" buzzwords.
+3. CONTEXT AWARENESS: You are currently on ${fieldContext.platformHint}. Adapt your tone to fit this platform's highest standards.
+4. SOCTRATIC PRECISION: Answer the *intent* of the question. If the field asks for "Inspiration", connect the user's background to the project's 'Why'.
+`;
+
+        if (fieldContext.characterLimit) instruction += `\nCONSTRAINT: Under ${fieldContext.characterLimit} characters. Be concise but profound.\n`;
+        if (fieldContext.wordLimit) instruction += `\nCONSTRAINT: Approximately ${fieldContext.wordLimit} words.\n`;
+
+        if (fieldContext.format === 'markdown') {
+            instruction += `\nFORMAT: Use sophisticated, magazine-quality Markdown. Bold technical terms for impact. Use whitespace to create an organic, premium feel.\n`;
+        } else {
+            instruction += `\nFORMAT: STRICT PLAIN TEXT. Zero Markdown symbols. No asterisks, hashes, or backticks. Focus on perfect sentence structure and clean typography.\n`;
+        }
+
+        if (fieldContext.surroundingContext) instruction += `\nFIELD-LEVEL CONTEXT: ${fieldContext.surroundingContext}\n`;
+
+        return { userProfile, projectContext, instruction };
     } catch (e) {
-        console.error('[Sparkle] Failed to load context:', e);
+        console.error('[Sparkle] Critical context resolution failure:', e);
+        throw e;
+    }
+}
+
+// ========== RESILIENT API WRAPPER (Phase 4.5) ==========
+async function hardenedFetch(url: string, options: RequestInit, retryCount = 0): Promise<Response> {
+    const storage = getStorage();
+    if (!storage) throw new Error('Extension context lost');
+
+    // 1. Ensure we have the latest token before the first attempt if it's a retry
+    if (retryCount > 0) {
+        try {
+            const refreshResponse = await chrome.runtime.sendMessage({ type: 'REFRESH_TOKEN' });
+            if (refreshResponse && refreshResponse.token) {
+                options.headers = {
+                    ...options.headers,
+                    'Authorization': `Bearer ${refreshResponse.token}`
+                };
+                console.log(`🔄 [EXT] Token refreshed for retry ${retryCount}`);
+            }
+        } catch (e) {
+            console.warn('[EXT] Token refresh failed during retry', e);
+        }
     }
 
-    const storedToken = (await storage.get(['authToken'])).authToken;
+    const response = await fetch(url, options);
+
+    // 2. Handle 401 Unauthorized with a single retry
+    if (response.status === 401 && retryCount < 1) {
+        console.warn('⚠️ [EXT] 401 Unauthorized detected. Attempting token refresh...');
+        return await hardenedFetch(url, options, retryCount + 1);
+    }
+
+    return response;
+}
+
+// ========== ENHANCED API HELPER (Phase 4) ==========
+async function generateFieldContentEnhanced(
+    fieldContext: FieldContext
+) {
+    const storage = getStorage();
+    if (!storage) throw new Error('Extension context invalidated');
+
+    const { userProfile, projectContext, instruction } = await resolveDistinguishedContext(fieldContext);
+
+    // CRITICAL: Request token refresh from extension before API call
+    let storedToken = (await storage.get(['authToken'])).authToken;
+    try {
+        const refreshResponse = await chrome.runtime.sendMessage({ type: 'REFRESH_TOKEN' });
+        if (refreshResponse && refreshResponse.token) {
+            storedToken = refreshResponse.token;
+            console.log('🔄 [Sparkle] Token refreshed pre-generation');
+        }
+    } catch (msgErr) {
+        console.warn('⚠️ [Sparkle] Could not proactively refresh token', msgErr);
+    }
+
     if (!storedToken) throw new Error('Not authenticated');
 
-    let instruction = `You are a professional application writer. TASK: Fill the "${fieldContext.fieldCategory.replace('_', ' ')}" field for this form.\n\n`;
-    instruction += `CRITICAL INSTRUCTIONS:\n1. Use User Profile and Project Context.\n2. Do NOT hallucinate.\n3. Adapt tone.\n`;
-
-    if (fieldContext.characterLimit) instruction += `\nCONSTRAINT: UNDER ${fieldContext.characterLimit} characters.\n`;
-    if (fieldContext.wordLimit) instruction += `\nCONSTRAINT: ~${fieldContext.wordLimit} words.\n`;
-    if (fieldContext.format === 'markdown') instruction += `\nFORMAT: Use markdown.\n`;
-    if (fieldContext.surroundingContext) instruction += `\nPAGE CONTEXT: ${fieldContext.surroundingContext}\n`;
-
-    const response = await fetch(ENDPOINTS.mapFields, {
+    const response = await hardenedFetch(ENDPOINTS.mapFields, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -1223,7 +1362,17 @@ async function generateFieldContentEnhanced(
     });
 
     if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return await response.json();
+    const data = await response.json();
+
+    // Jaw-dropping sanitation before it hits the typewriter
+    if (data.sparkle_result && data.sparkle_result.content) {
+        data.sparkle_result.content = AppleSanitizer.sanitize(
+            data.sparkle_result.content,
+            fieldContext.format as any
+        );
+    }
+
+    return data;
 }
 
 // Global scope helpers
@@ -1272,7 +1421,7 @@ async function handleAutoFill(projectContext?: string) {
         const stored = await storage.get(['userProfile', 'authToken']);
         if (!stored.authToken) return { success: false, error: "Not authenticated" };
 
-        const response = await fetch(ENDPOINTS.mapFields, {
+        const response = await hardenedFetch(ENDPOINTS.mapFields, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

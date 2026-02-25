@@ -110,7 +110,27 @@ const OpportunityDetail = () => {
     // Try to open the URL
     try {
       const normalizedUrl = normalizeApplyUrl(scholarship.source_url);
-      const opened = window.open(normalizedUrl, '_blank', 'noopener,noreferrer');
+
+      // Detect unsalvageable URLs (generic listings with no specific page)
+      const isGenericListing =
+        normalizedUrl === 'https://devpost.com/hackathons' ||
+        normalizedUrl === 'https://devpost.com/hackathons/' ||
+        normalizedUrl.match(/^https:\/\/devpost\.com\/hackathons\/?(\?.*)?$/i) ||
+        normalizedUrl === 'https://unstop.com/hackathons' ||
+        normalizedUrl === 'https://unstop.com/competitions' ||
+        normalizedUrl === 'https://unstop.com/o' ||
+        normalizedUrl.match(/^https:\/\/unstop\.com\/(hackathons|competitions|o)\/?(\?.*)?$/i);
+
+      let targetUrl = normalizedUrl;
+      const platform = normalizedUrl.includes('devpost') ? 'devpost.com' : 'unstop.com';
+
+      if (isGenericListing) {
+        // Fallback: Google search scoped to the platform
+        const query = `${scholarship.name} site:${platform}`;
+        targetUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+      }
+
+      const opened = window.open(targetUrl, '_blank', 'noopener,noreferrer');
 
       if (!opened) {
         throw new Error('Popup blocked');
@@ -127,8 +147,10 @@ const OpportunityDetail = () => {
       }
 
       toast({
-        title: 'Application opened',
-        description: 'Good luck with your application! 🎯',
+        title: isGenericListing ? `Searching for ${scholarship.name}` : 'Application opened',
+        description: isGenericListing
+          ? `Opening Google search for the exact page on ${platform}.`
+          : 'Good luck with your application! 🎯',
       });
     } catch (error) {
       // Fallback if URL fails to open

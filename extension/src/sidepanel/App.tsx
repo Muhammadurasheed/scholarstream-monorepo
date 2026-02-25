@@ -148,21 +148,41 @@ export default function App() {
         return () => clearInterval(interval);
     }, [authToken]);
 
+    // Unified Token Refresh Helper
+    const refreshAuthToken = async (force = true) => {
+        try {
+            const currentUser = auth.currentUser;
+            if (currentUser) {
+                const token = await currentUser.getIdToken(force);
+                setAuthToken(token);
+                const storage = getStorage();
+                if (storage) await storage.set({ authToken: token });
+                console.log(`🔄 [EXT] Auth token refreshed (force=${force})`);
+                return token;
+            }
+        } catch (err) {
+            console.warn("⚠️ [EXT] Token refresh failed:", err);
+        }
+        return authToken;
+    };
+
+    // Listen for refresh requests from content script
+    useEffect(() => {
+        const messageListener = (message: any, _sender: any, sendResponse: any) => {
+            if (message.type === 'REFRESH_TOKEN') {
+                refreshAuthToken(true).then(token => sendResponse({ token }));
+                return true; // Keep channel open for async response
+            }
+        };
+        chrome.runtime.onMessage.addListener(messageListener);
+        return () => chrome.runtime.onMessage.removeListener(messageListener);
+    }, [authToken]);
+
     // FAANG-grade Token Refresh Logic
     useEffect(() => {
         const unsubscribe = auth.onIdTokenChanged(async (user: any) => {
             if (user) {
-                const token = await user.getIdToken();
-                const storage = getStorage();
-                if (storage) {
-                    await storage.set({ authToken: token });
-                    setAuthToken(token);
-                    console.log('🔄 [EXT] Auth token refreshed automatically');
-                }
-            } else {
-                // Only clear if we explicitly don't have a user
-                // This prevents flickering during rapid refreshes
-                // setAuthToken(null);
+                await refreshAuthToken(false); // Background refresh (no force)
             }
         });
         return () => unsubscribe();
@@ -275,13 +295,16 @@ export default function App() {
         let fileType = 'text';
 
         if (needsBackendParsing && authToken) {
+            // CRITICAL: Force-refresh the Firebase token before API call
+            const freshToken = await refreshAuthToken(true);
+
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'assistant',
                 text: `📄 Processing **${file.name}**... Extracting text content.`
             }]);
 
-            const result = await parseDocument(file, authToken);
+            const result = await parseDocument(file, freshToken);
             if (!result.success) {
                 setContextStatus(prev => ({ ...prev, isProcessing: false, processingError: result.error || 'Failed' }));
                 setMessages(prev => [...prev, {
@@ -291,6 +314,19 @@ export default function App() {
                 }]);
                 return;
             }
+
+            // CRITICAL: Validate that parsing actually extracted usable content
+            // Prevents storing 0-char documents that starve the copilot of context
+            if (!result.content || result.charCount < 10) {
+                setContextStatus(prev => ({ ...prev, isProcessing: false, processingError: 'No text extracted' }));
+                setMessages(prev => [...prev, {
+                    id: Date.now().toString(),
+                    role: 'assistant',
+                    text: `⚠️ Could not extract readable text from **${file.name}**.\n\nThis may be a scanned or image-based document. Try:\n- A text-based PDF (not scanned)\n- Copy-pasting the content into a **.txt** file\n- A **.docx** version of the document`
+                }]);
+                return;
+            }
+
             content = result.content;
             charCount = result.charCount;
             fileType = result.fileType;
@@ -421,6 +457,9 @@ export default function App() {
     const handleSend = async () => {
         if (!input.trim()) return;
 
+        // CRITICAL: Force-refresh the Firebase token before API call
+        const freshToken = await refreshAuthToken(true);
+
         const userMsg: Message = { id: Date.now().toString(), role: 'user', text: input };
         setMessages(prev => [...prev, userMsg]);
         setInput('');
@@ -487,7 +526,7 @@ export default function App() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
+                    'Authorization': `Bearer ${freshToken}`
                 },
                 body: JSON.stringify({
                     query: cleanQuery,
@@ -539,6 +578,8 @@ export default function App() {
 
     const handleAutoFill = async () => {
         setLoading(true);
+        // CRITICAL: Ensure token is fresh before telling content script to scan/gen
+        await refreshAuthToken(true);
         try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             if (tab?.id) {

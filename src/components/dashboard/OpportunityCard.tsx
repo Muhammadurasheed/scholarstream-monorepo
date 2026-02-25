@@ -163,11 +163,33 @@ export const OpportunityCard = ({
     // Smart fallback: try source_url, then navigate to details page
     if (scholarship.source_url) {
       const normalizedUrl = normalizeApplyUrl(scholarship.source_url);
-      window.open(normalizedUrl, '_blank', 'noopener,noreferrer');
-      toast({
-        title: 'Application opened',
-        description: 'Good luck with your application!',
-      });
+
+      // Detect unsalvageable URLs (generic listings with no specific page)
+      const isGenericListing =
+        normalizedUrl === 'https://devpost.com/hackathons' ||
+        normalizedUrl === 'https://devpost.com/hackathons/' ||
+        normalizedUrl.match(/^https:\/\/devpost\.com\/hackathons\/?(\?.*)?$/i) ||
+        normalizedUrl === 'https://unstop.com/hackathons' ||
+        normalizedUrl === 'https://unstop.com/competitions' ||
+        normalizedUrl === 'https://unstop.com/o' ||
+        normalizedUrl.match(/^https:\/\/unstop\.com\/(hackathons|competitions|o)\/?(\?.*)?$/i);
+
+      if (isGenericListing) {
+        // Fallback: Google search for the specific opportunity
+        const platform = normalizedUrl.includes('devpost') ? 'devpost.com' : 'unstop.com';
+        const query = `${scholarship.name} site:${platform}`;
+        window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank', 'noopener,noreferrer');
+        toast({
+          title: `Searching for ${scholarship.name}`,
+          description: `Opening Google search for the exact page on ${platform}.`,
+        });
+      } else {
+        window.open(normalizedUrl, '_blank', 'noopener,noreferrer');
+        toast({
+          title: 'Application opened',
+          description: 'Good luck with your application!',
+        });
+      }
     } else {
       // Fallback: navigate to detail page with application instructions
       navigate(`/opportunity/${scholarship.id}`);
@@ -197,21 +219,21 @@ export const OpportunityCard = ({
     if (scholarship.amount > 0) {
       return formatCurrency(scholarship.amount);
     }
-    
+
     // Priority 2: Use amount_display if it has value content
     const amountDisplay = stripHtml(scholarship.amount_display || '');
-    if (amountDisplay && 
-        !['varies', 'see details', 'tbd', 'n/a', 'unknown', '$0', '0'].includes(amountDisplay.toLowerCase().trim())) {
+    if (amountDisplay &&
+      !['varies', 'see details', 'tbd', 'n/a', 'unknown', '$0', '0'].includes(amountDisplay.toLowerCase().trim())) {
       return amountDisplay;
     }
-    
+
     // Priority 3: Check tags for prize info (common in hackathons)
     const tags = scholarship.tags || [];
     const prizeTag = tags.find(t => t.toLowerCase().includes('prize') || t.toLowerCase().includes('$'));
     if (prizeTag) {
       return prizeTag;
     }
-    
+
     // V2 FIX: Better call-to-action instead of generic text
     const type = inferType();
     if (type === 'hackathon' || type === 'bounty') {
@@ -219,7 +241,7 @@ export const OpportunityCard = ({
     }
     return 'View Details →';
   };
-  
+
   const displayAmount = getDisplayAmount();
 
   return (

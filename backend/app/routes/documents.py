@@ -34,21 +34,46 @@ async def verify_token(authorization: str) -> str:
 
 
 def extract_text_from_pdf(content: bytes) -> str:
-    """Extract text from PDF using PyPDF2"""
+    """Extract text from PDF using PyPDF2 with PyMuPDF fallback.
+    
+    Strategy: PyPDF2 first (lightweight), then PyMuPDF/fitz (handles scanned/complex PDFs).
+    Returns extracted text or empty string — caller is responsible for rejecting empty results.
+    """
+    text = ""
+
+    # Engine 1: PyPDF2
     try:
         import PyPDF2
         reader = PyPDF2.PdfReader(io.BytesIO(content))
-        text_parts = []
-        for page in reader.pages:
-            text_parts.append(page.extract_text() or '')
-        return '\n\n'.join(text_parts)
+        text_parts = [page.extract_text() or '' for page in reader.pages]
+        text = '\n\n'.join(text_parts).strip()
+        if text and len(text) > 20:
+            logger.info("PDF text extracted via PyPDF2", chars=len(text), pages=len(reader.pages))
+            return text
+        logger.warning("PyPDF2 returned insufficient text, trying PyMuPDF fallback", chars=len(text))
     except ImportError:
-        logger.warning("PyPDF2 not installed, falling back to basic extraction")
-        # Return placeholder if PyPDF2 not available
-        return "[PDF content - please install PyPDF2 for full extraction]"
+        logger.warning("PyPDF2 not available, trying PyMuPDF fallback")
     except Exception as e:
-        logger.error("PDF extraction failed", error=str(e))
-        raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
+        logger.warning("PyPDF2 extraction error, trying PyMuPDF fallback", error=str(e))
+
+    # Engine 2: PyMuPDF (fitz) — handles scanned PDFs, complex layouts, encrypted files better
+    try:
+        import fitz  # pymupdf
+        doc = fitz.open(stream=content, filetype="pdf")
+        text_parts = [page.get_text() for page in doc]
+        fitz_text = '\n\n'.join(text_parts).strip()
+        doc.close()
+        if fitz_text and len(fitz_text) > len(text):
+            logger.info("PDF text extracted via PyMuPDF fallback", chars=len(fitz_text), pages=len(text_parts))
+            return fitz_text
+        logger.warning("PyMuPDF also returned insufficient text", chars=len(fitz_text))
+    except ImportError:
+        logger.warning("PyMuPDF (fitz) not available")
+    except Exception as e:
+        logger.warning("PyMuPDF extraction error", error=str(e))
+
+    # Return whatever we got (may be empty — parse_document endpoint handles this)
+    return text
 
 
 def extract_text_from_docx(content: bytes) -> str:
@@ -59,8 +84,8 @@ def extract_text_from_docx(content: bytes) -> str:
         paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
         return '\n\n'.join(paragraphs)
     except ImportError:
-        logger.warning("python-docx not installed, falling back to basic extraction")
-        return "[DOCX content - please install python-docx for full extraction]"
+        logger.warning("python-docx not installed, no text extracted from DOCX")
+        return ""
     except Exception as e:
         logger.error("DOCX extraction failed", error=str(e))
         raise HTTPException(status_code=400, detail=f"Failed to parse DOCX: {str(e)}")
@@ -130,6 +155,25 @@ async def parse_document(
         
         # Clean the extracted text
         extracted_text = clean_extracted_text(extracted_text)
+        
+        # CRITICAL: Reject binary-format documents that extracted to empty/near-empty text
+        # This prevents the extension from storing a 0-char document and thinking it succeeded
+        if file_type in ("pdf", "docx") and len(extracted_text.strip()) < 10:
+            logger.warning(
+                "Document extraction returned no usable text",
+                user_id=user_id,
+                filename=file.filename,
+                file_type=file_type,
+                raw_chars=len(extracted_text)
+            )
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Could not extract readable text from this {file_type.upper()}. "
+                    "It may be a scanned/image-based document, or the file may be corrupted. "
+                    "Try a text-based PDF, or copy-paste the content into a .txt file."
+                )
+            )
         
         # Truncate if too long (50k chars max for context)
         max_chars = 50000

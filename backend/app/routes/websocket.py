@@ -308,18 +308,26 @@ def convert_to_scholarship(enriched_data: Dict) -> Optional[Scholarship]:
         type_tags = enriched_data.get('type_tags', [])
         all_tags = list(set(enriched_data.get('tags', []) + geo_tags + type_tags))
 
-        # Calculate deadline_timestamp
-        deadline_str = enriched_data.get('deadline') or now
-        try:
-            # Try parsing simple YYYY-MM-DD
-            if len(deadline_str) == 10:
-                dt = datetime.strptime(deadline_str, "%Y-%m-%d")
-            else:
-                dt = datetime.fromisoformat(deadline_str.replace('Z', '+00:00'))
-            deadline_timestamp = int(dt.timestamp())
-        except Exception:
-            # Fallback to now + 30 days if parse fails
-            deadline_timestamp = int(datetime.utcnow().timestamp()) + (30 * 24 * 3600)
+        # Calculate deadline_timestamp — NEVER fabricate fake deadlines
+        deadline_str = enriched_data.get('deadline') or None
+        deadline_timestamp = None
+        if deadline_str:
+            try:
+                # Try parsing simple YYYY-MM-DD
+                if len(deadline_str) == 10:
+                    dt = datetime.strptime(deadline_str, "%Y-%m-%d")
+                else:
+                    dt = datetime.fromisoformat(deadline_str.replace('Z', '+00:00'))
+                deadline_timestamp = int(dt.timestamp())
+                
+                # REJECT if deadline is in the past
+                if deadline_timestamp < int(datetime.utcnow().timestamp()):
+                    logger.debug("Dropping opportunity with past deadline", name=name, deadline=deadline_str)
+                    return None
+            except Exception:
+                # Unparseable deadline — leave as None, don't fabricate
+                deadline_str = None
+                deadline_timestamp = None
 
         # Create Deterministic ID if missing
         opp_id = enriched_data.get('id')

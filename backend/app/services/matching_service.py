@@ -151,10 +151,17 @@ class OpportunityMatchingService:
         now = datetime.now().timestamp()
         
         for opp in opportunities:
-            # Skip expired
+            # Skip expired — check BOTH numeric timestamp AND string deadline
             if hasattr(opp, 'deadline_timestamp') and opp.deadline_timestamp:
                 if opp.deadline_timestamp < int(now):
                     continue
+            elif hasattr(opp, 'deadline') and opp.deadline:
+                try:
+                    deadline_dt = datetime.fromisoformat(opp.deadline.replace('Z', '+00:00'))
+                    if deadline_dt.timestamp() < now:
+                        continue
+                except (ValueError, TypeError):
+                    pass  # Keep if unparseable
             
             # Calculate score using PersonalizationEngine
             score = self.calculate_match_score(opp, user_profile)

@@ -28,12 +28,21 @@ chrome.sidePanel
     .catch((error) => console.error(error));
 
 // Listen for messages from Content Script or Side Panel
-chrome.runtime.onMessage.addListener((message, sender) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'OPEN_SIDE_PANEL') {
         if (sender.tab && sender.tab.windowId) {
             chrome.sidePanel.open({ windowId: sender.tab.windowId })
                 .catch((error) => console.error("Failed to open panel:", error));
         }
+    } else if (message.type === 'REFRESH_TOKEN') {
+        // This is called by the content script or sidepanel when a token is about to expire or has expired.
+        // In a real Firebase setup, we'd use getAuth().currentUser.getIdToken(true).
+        // For this extension, we rely on the web app to push the latest token via the 'scholarstream-auth-sync' event.
+        // However, we can return the current token we have, which might have been updated by the sidepanel.
+        chrome.storage.local.get(['authToken'], (result) => {
+            sendResponse({ token: result.authToken || currentAuthToken });
+        });
+        return true; // Keep message channel open
     }
 });
 
