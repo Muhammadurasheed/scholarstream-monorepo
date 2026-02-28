@@ -28,3 +28,16 @@ dist-ssr
 *.sln
 *.sw?
 
+# Internal project files (not for GitHub)
+script.txt
+real-script.txt
+ss-details.md
+hackathon.txt
+backend/devdash.md
+backend/backendlog.md
+env.yaml
+prepare_deploy_env.py
+inspect_*.py
+audit_*.py
+surgical_*.py
+

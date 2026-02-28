@@ -26,7 +26,7 @@ export const StatsCard = ({ icon: Icon, value, label, iconColor = 'text-primary'
           </div>
         </div>
         <div>
-          <div className="text-3xl font-bold text-foreground">{value}</div>
+          <div className="text-2xl sm:text-3xl font-bold text-foreground truncate">{value}</div>
           <p className="text-sm text-muted-foreground">{label}</p>
         </div>
       </div>

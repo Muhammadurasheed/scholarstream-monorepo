@@ -349,7 +349,7 @@ const Dashboard = () => {
         const daysUntil = calculateDaysUntilDeadline(o.deadline);
         return daysUntil < 7 && daysUntil >= 0;
       }),
-      highMatch: filtered.filter(o => (o.match_score || 0) >= 85),
+      highMatch: filtered.filter(o => (o.match_score || 0) >= 70),
       byType: {
         scholarships,
         hackathons,
@@ -443,7 +443,7 @@ const Dashboard = () => {
                 {getGreeting()}, {getUserName()}! 👋
               </h1>
               <p className="text-foreground/70 font-medium">
-                You have <span className="text-primary font-bold">{groupedOpportunities.urgent.length} urgent opportunities</span> and <span className="text-primary font-bold">{groupedOpportunities.highMatch.length} excellent matches</span> waiting.
+                You have <span className="text-primary font-bold">{groupedOpportunities.urgent.length} urgent opportunities</span> and <span className="text-primary font-bold">{groupedOpportunities.highMatch.length} strong matches</span> waiting.
               </p>
             </div>
 
@@ -503,7 +503,7 @@ const Dashboard = () => {
                       Your Best Matches
                     </h2>
                     <p className="text-muted-foreground">
-                      Opportunities with 85%+ match score based on your profile
+                      Opportunities with 70%+ match score based on your profile
                     </p>
                   </div>
                 </div>

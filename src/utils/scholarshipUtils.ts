@@ -3,6 +3,17 @@ import { Scholarship, MatchTier, PriorityLevel } from '@/types/scholarship';
 import { differenceInDays, format, formatDistanceToNow } from 'date-fns';
 
 export const formatCurrency = (amount: number): string => {
+  // Use compact notation for large numbers to prevent UI overflow
+  // $1,295,268,639 → $1.3B (Google Finance style)
+  if (Math.abs(amount) >= 1_000_000_000) {
+    return `$${(amount / 1_000_000_000).toFixed(1)}B`;
+  }
+  if (Math.abs(amount) >= 1_000_000) {
+    return `$${(amount / 1_000_000).toFixed(1)}M`;
+  }
+  if (Math.abs(amount) >= 100_000) {
+    return `$${(amount / 1_000).toFixed(0)}K`;
+  }
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
