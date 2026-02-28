@@ -65,7 +65,8 @@
             "http://localhost:5173/*",
             "https://scholarstream.app/*",
             "https://*.scholarstream.app/*",
-            "https://scholarstream-frontend-opdnpd6bsq-uc.a.run.app/*"
+            "https://scholarstream-frontend-opdnpd6bsq-uc.a.run.app/*",
+            "https://scholarstream-frontend-1086434452502.us-central1.run.app/*"
         ]
     }
 }

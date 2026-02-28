@@ -29,6 +29,46 @@ function getStorage() {
 }
 
 /**
+ * Proxied Fetch for Content Script (In-lined)
+ * Routes requests through the background script to bypass CORS.
+ */
+async function proxiedFetch(url: string, options: any = {}): Promise<any> {
+    if (!isExtensionValid()) {
+        throw new Error('Extension context lost. Please refresh the page.');
+    }
+
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+            {
+                type: 'PROXIED_REQUEST',
+                url,
+                options: {
+                    method: options.method || 'GET',
+                    headers: options.headers || {},
+                    body: options.body
+                }
+            },
+            (response) => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                    return;
+                }
+                if (!response.success) {
+                    reject(new Error(response.error || 'Request failed'));
+                    return;
+                }
+                resolve({
+                    ok: true,
+                    json: async () => response.data,
+                    text: async () => JSON.stringify(response.data),
+                    status: response.status || 200
+                });
+            }
+        );
+    });
+}
+
+/**
  * DOM Scanner (In-lined)
  */
 function getPageContext() {
@@ -152,7 +192,7 @@ window.addEventListener('scholarstream-auth-logout', () => {
 });
 
 // ===== FALLBACK: Also poll localStorage for auth token (for pages already loaded) =====
-if (window.location.host.includes('localhost') || window.location.host.includes('scholarstream')) {
+if (window.location.host.includes('localhost') || window.location.host.includes('scholarstream') || window.location.host.includes('us-central1.run.app')) {
     const extractAndSendToken = () => {
         let token = localStorage.getItem('scholarstream_auth_token');
 
@@ -419,13 +459,34 @@ class FocusEngine {
             display: none;
             z-index: 2147483647;
             background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            border: 2px solid #3b82f6;
+            border: 1px solid #3b82f6;
             border-radius: 12px;
             padding: 12px;
             box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
             min-width: 320px;
             max-width: 420px;
+            font-family: system-ui, -apple-system, sans-serif;
         `;
+
+        // Add internal style for scrollbar in the overlay
+        const style = document.createElement('style');
+        style.textContent = `
+            #ss-refinement-input::-webkit-scrollbar {
+                width: 6px;
+            }
+            #ss-refinement-input::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            #ss-refinement-input::-webkit-scrollbar-thumb {
+                background: rgba(71, 85, 105, 0.4);
+                border-radius: 10px;
+            }
+            #ss-refinement-input::-webkit-scrollbar-thumb:hover {
+                background: rgba(71, 85, 105, 0.7);
+            }
+        `;
+        overlay.appendChild(style);
+
         overlay.innerHTML = `
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
                 <div style="width: 24px; height: 24px; background: linear-gradient(135deg, #FF6B6B, #4ECDC4); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
@@ -594,7 +655,7 @@ IMPORTANT:
 1. Apply the user's specific refinement instruction while strictly adhering to the Project Context in the and Einstein Grounding rules.
 2. Return ONLY the refined content, no explanations.`;
 
-            const response = await fetch(ENDPOINTS.mapFields, {
+            const response = await proxiedFetch(ENDPOINTS.mapFields, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1312,7 +1373,8 @@ async function hardenedFetch(url: string, options: RequestInit, retryCount = 0):
         }
     }
 
-    const response = await fetch(url, options);
+    // Use proxiedFetch if in content script context, otherwise fetch
+    const response = await proxiedFetch(url, options);
 
     // 2. Handle 401 Unauthorized with a single retry
     if (response.status === 401 && retryCount < 1) {

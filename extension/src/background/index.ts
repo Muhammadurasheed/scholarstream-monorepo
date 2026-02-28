@@ -35,12 +35,49 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 .catch((error) => console.error("Failed to open panel:", error));
         }
     } else if (message.type === 'REFRESH_TOKEN') {
-        // This is called by the content script or sidepanel when a token is about to expire or has expired.
-        // In a real Firebase setup, we'd use getAuth().currentUser.getIdToken(true).
-        // For this extension, we rely on the web app to push the latest token via the 'scholarstream-auth-sync' event.
-        // However, we can return the current token we have, which might have been updated by the sidepanel.
         chrome.storage.local.get(['authToken'], (result) => {
             sendResponse({ token: result.authToken || currentAuthToken });
+        });
+        return true; // Keep message channel open
+    } else if (message.type === 'PROXIED_REQUEST') {
+        const { url, options } = message;
+
+        // Ensure we have a token
+        chrome.storage.local.get(['authToken'], async (result) => {
+            const token = result.authToken || currentAuthToken;
+
+            try {
+                const headers = {
+                    ...options.headers,
+                    'Content-Type': options.headers['Content-Type'] || 'application/json',
+                };
+
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+
+                const response = await fetch(url, {
+                    ...options,
+                    headers
+                });
+
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    sendResponse({
+                        success: false,
+                        error: data.detail || `Server error: ${response.status}`,
+                        status: response.status
+                    });
+                } else {
+                    sendResponse({ success: true, data });
+                }
+            } catch (error) {
+                sendResponse({
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Network error'
+                });
+            }
         });
         return true; // Keep message channel open
     }
@@ -66,6 +103,8 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
         'http://localhost:8080',
         'http://localhost:5173',
         'https://scholarstream.app',
+        'https://scholarstream-frontend-1086434452502.us-central1.run.app',
+        'https://scholarstream-frontend-opdnpd6bsq-uc.a.run.app',
     ];
 
     const origin = sender.url ? new URL(sender.url).origin : '';
@@ -179,7 +218,7 @@ function showNotification(opportunity: any) {
 
     chrome.notifications.onButtonClicked.addListener((notifId, btnIdx) => {
         if (notifId === notificationId && btnIdx === 0) {
-            chrome.tabs.create({ url: opportunity.url || 'http://localhost:5173/dashboard' });
+            chrome.tabs.create({ url: opportunity.url || 'https://scholarstream-frontend-1086434452502.us-central1.run.app/dashboard' });
         }
     });
 }

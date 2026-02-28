@@ -648,7 +648,7 @@ export default function App() {
 
                     <div className="space-y-3 pt-4">
                         <button
-                            onClick={() => window.open('http://localhost:8080/login', '_blank')}
+                            onClick={() => window.open('https://scholarstream-frontend-1086434452502.us-central1.run.app/login', '_blank')}
                             className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl transition-all flex justify-center items-center gap-2 shadow-lg shadow-blue-900/20 group hover:shadow-blue-500/25 active:scale-95"
                         >
                             <span>Launch Web App</span>

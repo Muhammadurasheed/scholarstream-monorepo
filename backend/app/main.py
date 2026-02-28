@@ -66,7 +66,17 @@ allow_origins = settings.cors_origins_list + [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For dev, wildcard is safest for extension weirdness
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:8080",
+        "http://localhost:3000",
+        "https://scholarstream-frontend-1086434452502.us-central1.run.app",
+        "https://scholarstream-frontend-opdnpd6bsq-uc.a.run.app",
+        "https://scholarstream.app",
+        "https://www.scholarstream.app",
+        "chrome-extension://iommjbdkgfhpconinoiagkjkiajdohnn",
+        "chrome-extension://*", 
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

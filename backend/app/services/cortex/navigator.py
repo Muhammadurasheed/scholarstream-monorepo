@@ -48,7 +48,7 @@ class Sentinel:
         "https://earn.superteam.fun/bounties/",  # Solana ecosystem
         "https://replit.com/bounties",
         "https://www.algorand.foundation/bounties",
-        "https://dorahacks.io/bounty", # DoraHacks Bounties
+        "https://dorahacks.io/bugbounty", # DoraHacks Bounties
         "https://dorahacks.io/grant",  # DoraHacks Grants
         
         # ======== WEB3 GRANTS & ECOSYSTEMS ========

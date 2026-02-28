@@ -167,13 +167,15 @@ async def fetch_dorahacks_hackathons() -> List[Dict[str, Any]]:
 
 
 async def fetch_dorahacks_bounties() -> List[Dict[str, Any]]:
-    """Fetch bounties from DoraHacks"""
+    """Fetch bounties from DoraHacks with API fallback to frontend scraping"""
     try:
+        # 1. Try API first
         url = "https://dorahacks.io/api/bounty/list?status=open&page=1&limit=50"
         content = await crawler_service.fetch_content(url)
         
         if content:
              import re
+             # DoraHacks often wraps JSON in <pre> tags when fetched via some methods
              pre_match = re.search(r'<pre[^>]*>(.*?)</pre>', content, re.DOTALL)
              json_text = pre_match.group(1) if pre_match else content
              json_text = json_text.replace('&quot;', '"').replace('&lt;', '<').replace('&gt;', '>')
@@ -184,37 +186,71 @@ async def fetch_dorahacks_bounties() -> List[Dict[str, Any]]:
                  try:
                      data = json.loads(json_text[start:end+1])
                      bounties = data.get('data', {}).get('list', []) if isinstance(data, dict) else []
-                     logger.info("DoraHacks bounties fetched", count=len(bounties))
-                     return bounties
+                     if bounties:
+                         logger.info("DoraHacks bounties fetched via API", count=len(bounties))
+                         return bounties
                  except:
                      pass
-                     
+        
+        # 2. Fallback to Frontend Scrape (similar to hackathons)
+        logger.info("DoraHacks bounty API failed, attempting frontend scrape...")
+        frontend_url = "https://dorahacks.io/bugbounty"
+        html = await crawler_service.fetch_content(frontend_url)
+        
+        if html:
+            # Look for __NEXT_DATA__
+            import re
+            match = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html, re.DOTALL)
+            if match:
+                try:
+                    data = json.loads(match.group(1))
+                    
+                    # Recursive search for bounty-like objects
+                    def find_bounties(obj, found=None):
+                        if found is None:
+                            found = []
+                        if isinstance(obj, dict):
+                            # DoraHacks bounties have 'slug' and 'title' or 'name'
+                            if 'slug' in obj and ('title' in obj or 'name' in obj) and 'reward' in str(obj).lower():
+                                found.append(obj)
+                            for v in obj.values():
+                                find_bounties(v, found)
+                        elif isinstance(obj, list):
+                            for item in obj:
+                                find_bounties(item, found)
+                        return found
+                    
+                    bounties = find_bounties(data)
+                    # Deduplicate by slug
+                    unique = {b.get('slug', ''): b for b in bounties if b.get('slug')}
+                    if unique:
+                        logger.info("DoraHacks bounty frontend scrape success", count=len(unique))
+                        return list(unique.values())
+                except Exception as e:
+                    logger.debug("DoraHacks bounty __NEXT_DATA__ parse failed", error=str(e))
+
     except Exception as e:
         logger.warning("DoraHacks bounties fetch failed", error=str(e))
     
     return []
 
 
-def transform_dorahacks_hackathon(item: Dict[str, Any]) -> Optional[Scholarship]:
-    """Transform DoraHacks hackathon to Scholarship model"""
-    # DEBUG
-    # print(f"DEBUG: Raw Dora Item keys: {item.keys()}")
+def transform_dorahacks_item(item: Dict[str, Any], is_bounty: bool = False) -> Optional[Scholarship]:
+    """Transform DoraHacks hackathon or bounty to Scholarship model"""
     try:
         title = item.get('name') or item.get('title', '')
         slug = item.get('slug') or item.get('uname') or item.get('alias', '')
         
         if not title or not slug:
-            # DEBUG: Print exact values to diagnose why validation fails
-            # logger.warning("DoraHacks validation failed", title=title, slug=slug, keys=list(item.keys()))
-            # print(f"DEBUG: DoraHacks MISSING. Title='{title}' Slug='{slug}' Keys={list(item.keys())}")
-            # Try to recover title if name is None but slug isn't
             if slug and not title:
                  title = slug.replace('-', ' ').title()
             
             if not title or not slug:
                  return None
         
-        url = f"https://dorahacks.io/hackathon/{slug}"
+        # CORRECT URL PATH: /hackathon/ for hackathons, /bounty/ for bounties
+        path = "bounty" if is_bounty else "hackathon"
+        url = f"https://dorahacks.io/{path}/{slug}"
         
         # Parse prize (DoraHacks fields vary across endpoints/versions)
         # ENHANCED: More aggressive prize extraction from all possible fields
@@ -1023,7 +1059,7 @@ async def scrape_all_platforms() -> Dict[str, int]:
     try:
         dh_hackathons = await fetch_dorahacks_hackathons()
         for item in dh_hackathons:
-            s = transform_dorahacks_hackathon(item)
+            s = transform_dorahacks_item(item, is_bounty=False)
             if s:
                 all_scholarships.append(s)
                 results['dorahacks_hackathons'] += 1
@@ -1036,7 +1072,7 @@ async def scrape_all_platforms() -> Dict[str, int]:
     try:
         dh_bounties = await fetch_dorahacks_bounties()
         for item in dh_bounties:
-            s = transform_dorahacks_hackathon(item)  # Same structure
+            s = transform_dorahacks_item(item, is_bounty=True)
             if s:
                 s.tags = ['Bounty', 'DoraHacks', 'Web3']
                 s.type_tags = ['Bounty']

@@ -4,6 +4,7 @@ Handles AI-powered scholarship enrichment and matching
 """
 import os
 import google.generativeai as genai
+from google.generativeai.types import GenerationConfig
 from typing import Dict, List, Optional, Any
 import json
 import asyncio
@@ -55,7 +56,13 @@ class GeminiAIService:
                 try:
                     credentials, project = google.auth.default()
                     vertexai.init(project=project, location="us-central1")
-                    self.model = GenerativeModel(settings.gemini_model)
+                    self.model = GenerativeModel(
+                        settings.gemini_model,
+                        generation_config={
+                            "max_output_tokens": 8192,
+                            "temperature": 0.7,
+                        }
+                    )
                     self.use_vertex = True
                     logger.info("Vertex AI initialized successfully", mode="enterprise_adc")
                 except DefaultCredentialsError:
@@ -77,8 +84,24 @@ class GeminiAIService:
                 raise Exception("Missing AI credentials")
 
             genai.configure(api_key=settings.gemini_api_key)
-            self.model = genai.GenerativeModel(settings.gemini_model)
-            logger.info("Gemini API initialized successfully", mode="standard_apikey")
+            
+            # Default config for standard operations
+            self.default_config = GenerationConfig(
+                max_output_tokens=8192,
+                temperature=0.7,
+            )
+            # Long-form config for Sparkle content generation
+            self.longform_config = GenerationConfig(
+                max_output_tokens=8192,
+                temperature=0.75,
+                top_p=0.95,
+            )
+            
+            self.model = genai.GenerativeModel(
+                settings.gemini_model,
+                generation_config=self.default_config
+            )
+            logger.info("Gemini API initialized successfully", mode="standard_apikey", max_output_tokens=8192)
         
         # Initialize Upstash Redis for rate limiting and caching
         self.redis_client = None
@@ -189,6 +212,24 @@ class GeminiAIService:
         """Raw Gemini API call — isolated for rate limiter wrapping."""
         response = await self.model.generate_content_async(prompt)
         return response.text
+
+    async def generate_long_content_async(self, prompt: str) -> str:
+        """Generate long-form content with extended token budget.
+        Used by Sparkle for DevPost/DoraHacks fields that need comprehensive output."""
+        if not self._check_rate_limit():
+            raise Exception("Rate limit exceeded")
+        
+        async def _long_call(p: str) -> str:
+            if self.use_vertex:
+                response = await self.model.generate_content_async(p)
+            else:
+                response = await self.model.generate_content_async(
+                    p,
+                    generation_config=self.longform_config
+                )
+            return response.text
+        
+        return await gemini_rate_limiter.execute(_long_call, prompt)
     
     async def enrich_scholarship(
         self,

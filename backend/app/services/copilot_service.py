@@ -208,52 +208,31 @@ from the document content above (names, skills, experiences, projects) and use t
             profile_section = "❌ USER PROFILE (EXCLUDED by user preference) - DO NOT use any profile data. Only use document content."
         
         prompt = f"""
-You are the ScholarStream Co-Pilot V2: **{platform_persona['name']}**
+You are the ScholarStream Co-Pilot: **{platform_persona['name']}**
+Expertise: {platform_persona.get('expertise', 'opportunity applications')}
 
-You are an elite AI agent with deep expertise in: {platform_persona.get('expertise', 'opportunity applications')}
+=== KNOWLEDGE BASE ===
 
-=== KNOWLEDGE BASE (STRICTLY USE ONLY WHAT'S PROVIDED) ===
+{profile_section}
 
-1️⃣ {profile_section}
-
-2️⃣ PROJECT DOCUMENTS:
 {doc_section}
 
-3️⃣ CURRENT PAGE CONTEXT:
+CURRENT PAGE:
 - Platform: {platform_persona['name']}
 - URL: {page_url}
-- Page Title: {page_context.get('title', 'Unknown')}
-- Visible Content (Truncated): {page_context.get('content', '')[:40000]}
 
-=== PLATFORM-SPECIFIC TIPS ===
-{chr(10).join(f"• {tip}" for tip in platform_persona.get('tips', []))}
+=== INSTRUCTIONS ===
+1. **BE EXTREMELY CONCISE.** The user is in a small sidepanel. Do not write essays here.
+2. If the user asks to "draft", "write", or "fill" something, provide a **SHORT 1-2 sentence overview/insight** and then **DIRECT them to use the ✨ Sparkle icon** on the page fields for the full drafting.
+3. Use ONLY the knowledge base. Extract specific details.
+4. If no relevant documents exist, suggest uploading one.
 
-=== USER QUERY ===
-"{query}"
-
-=== YOUR TASK ===
-1. **Analyze** the user's query in context of the provided knowledge base
-2. **Use ONLY provided context**: If documents were provided, you MUST extract specific information from them.
-3. **DO NOT HALLUCINATE**: Never make up names, skills, or experiences. Use exactly what's in the documents.
-4. **If profile is excluded, do NOT infer profile data** - only use document content
-5. **Determine Intent**:
-   - Q&A: Answer questions about the opportunity/platform
-   - DRAFTING: Write essays, cover letters, short answers using the PROVIDED document content
-   - COACHING: Provide strategic advice for winning this specific type of opportunity
-   - FILLING: Generate field auto-fill actions when explicitly requested
-6. **Personalize**: Reference SPECIFIC details from the provided documents (if any)
-7. **Platform Expertise**: Apply your specialized knowledge of this platform's judging criteria
-
-=== OUTPUT FORMAT (JSON ONLY) ===
+=== OUTPUT FORMAT (JSON) ===
 {{
-  "thought_process": "Brief internal reasoning about which document/profile data you're using",
-  "message": "Your response to the user. Be helpful, specific, and actionable. Reference specific info from documents.",
-  "action": {{
-    "type": "fill_field",
-    "selector": "css_selector",
-    "value": "content"
-  }} OR null,
-  "coaching_tips": ["Optional strategic tips specific to this platform"]
+  "thought_process": "Brief reasoning",
+  "message": "Your response. KEEP IT UNDER 3 SMALL PARAGRAPHS. Be direct. If drafting, give a tiny insight + 'Use the ✨ Sparkle on the page for the full draft!'",
+  "action": null,
+  "coaching_tips": []
 }}
 """
         try:
@@ -305,6 +284,46 @@ You are an elite AI agent with deep expertise in: {platform_persona.get('experti
                 "platform": platform_persona['name']
             }
 
+    # Platform-specific length directives (words)
+    PLATFORM_LENGTH_HINTS = {
+        'devpost.com': {
+            'elevator_pitch': (100, 200),
+            'description': (800, 2500),
+            'inspiration': (300, 600),
+            'technical': (500, 1500),
+            'challenges': (300, 800),
+            'accomplishments': (300, 800),
+            'next_steps': (200, 500),
+            'generic': (300, 800),
+        },
+        'dorahacks.io': {
+            'description': (500, 1500),
+            'technical': (400, 1000),
+            'generic': (300, 800),
+        },
+        'default': {
+            'elevator_pitch': (50, 150),
+            'description': (200, 800),
+            'generic': (100, 400),
+        }
+    }
+
+    def _get_length_directive(self, platform_url: str, field_category: str, char_limit: int = None, word_limit: int = None) -> str:
+        """Get platform-aware length directive for a field."""
+        if char_limit:
+            return f"HARD LIMIT: Response MUST be under {char_limit} characters. Count carefully."
+        if word_limit:
+            return f"Target approximately {word_limit} words."
+
+        # Infer from platform + field category
+        parsed = urlparse(platform_url) if platform_url else None
+        domain = parsed.netloc.lower().replace('www.', '') if parsed else ''
+
+        hints = self.PLATFORM_LENGTH_HINTS.get(domain, self.PLATFORM_LENGTH_HINTS['default'])
+        min_words, max_words = hints.get(field_category, hints.get('generic', (100, 400)))
+
+        return f"Write {min_words}-{max_words} words. Be comprehensive and detailed."
+
     async def generate_field_content(
         self, 
         target_field: Dict[str, Any], 
@@ -314,13 +333,10 @@ You are an elite AI agent with deep expertise in: {platform_persona.get('experti
         project_context: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Sparkle V3 / Focus Fill Handler - Now with full TRI-FOLD knowledge base.
-        Generates content for a SINGLE specific field with high precision.
+        Sparkle V4 — Direct Content Generation (No JSON overhead).
         
-        TRI-FOLD KNOWLEDGE:
-        1. User Profile (skills, background, experience)
-        2. Project Context (uploaded document)
-        3. Field Context (what the field needs)
+        KEY CHANGE: The AI generates raw content text directly, not wrapped in JSON.
+        This gives the full token budget to actual content instead of schema overhead.
         """
         platform_persona = self._detect_platform(page_url or '')
         
@@ -330,98 +346,87 @@ You are an elite AI agent with deep expertise in: {platform_persona.get('experti
         field_format = target_field.get('format', 'plain')
         field_category = target_field.get('fieldCategory', 'generic')
         
-        # Build constraint instructions
-        constraints = []
-        if char_limit:
-            constraints.append(f"⚠️ HARD LIMIT: Response MUST be under {char_limit} characters. Count carefully!")
-        if word_limit:
-            constraints.append(f"📝 Aim for approximately {word_limit} words.")
-        if field_format == 'markdown':
-            constraints.append("📑 Format: Use markdown (bold, lists) for better readability.")
+        # Platform-aware length directive
+        length_directive = self._get_length_directive(page_url, field_category, char_limit, word_limit)
         
-        constraint_text = "\n".join(constraints) if constraints else "No specific length constraints."
-        
-        # Apple-grade Formatting Directives
-        format_guardrail = ""
+        # Format directive
         if field_format == 'markdown':
-            format_guardrail = """
-📑 FORMATTING (MARKDOWN):
-- Use "Magazine-Quality" Markdown.
-- Employ Bold tags (**bold**) for highlighting key technical terms or impact metrics.
-- Use Bulleted lists for clarity if multiple items are listed.
-- Ensure balanced whitespace and professional paragraph breaks.
-"""
+            format_directive = "Use clean Markdown: **bold** for key terms, bullet lists for multiple items, paragraph breaks for readability. No excessive formatting."
         else:
-            format_guardrail = """
-🚫 FORMATTING (STRICT PLAIN TEXT - ZERO-MD POLICY):
-- DO NOT use any markdown symbols. NO asterisks (**), NO hashes (#), NO backticks (`), NO underscores (_).
-- Use only standard capitalization and punctuation for emphasis.
-- Ensure perfect, clean typography.
-"""
+            format_directive = "STRICT PLAIN TEXT. No markdown symbols (no **, #, `, _). Use clean sentence structure and natural emphasis through word choice."
 
-        prompt = f"""
-You are the "{platform_persona['name']}" Einstein-Socrates Engine for ScholarStream. 
-Your purpose is to draft "Distinguished Engineer" grade content for application fields.
+        prompt = f"""You are a world-class application writer specializing in {platform_persona.get('expertise', 'opportunity applications')}.
 
-=== TRIAD KNOWLEDGE BASE ===
+TASK: Write the content for the "{target_field.get('label', field_category)}" field.
 
-1️⃣ PORTFOLIO (User Background):
-{json.dumps(user_profile, indent=2) if user_profile else "Not provided - focus on project context."}
+=== YOUR KNOWLEDGE BASE ===
 
-2️⃣ VERACITY SOURCE (Project Context):
-{project_context[:25000] if project_context else "No project document provided. Draft compelling content using the profile."}
+User Background:
+{json.dumps(user_profile, indent=2) if user_profile else 'Not provided.'}
 
-3️⃣ INSTRUCTIONAL INTENT:
-{instruction or "Draft a high-impact response for this field."}
+Project/Document Context:
+{project_context[:50000] if project_context else 'No project document provided. Use the user background to write compelling content.'}
 
-=== FIELD SPECIFICS ===
-- Category: {field_category.replace('_', ' ').title()}
-- Label/Context: {target_field.get('label')} | {target_field.get('surroundingContext', '')}
-- Constraints: {constraint_text}
-{format_guardrail}
+=== FIELD REQUIREMENTS ===
+- Field: {target_field.get('label')} ({field_category.replace('_', ' ').title()})
+- Context: {target_field.get('surroundingContext', 'N/A')}
+- Length: {length_directive}
+- Format: {format_directive}
 
-=== DISTINGUISHED ENGINE DIRECTIVES ===
-1. EINSTEIN GROUNDING: Your response MUST be a direct derivation of the VERACITY SOURCE. Use EXACT high-fidelity terms (e.g., "Confluent Flink", "Vertex AI").
-2. ZERO HALLUCINATION: If a fact is not in the Triad KB, do NOT invent it. Bridge gaps with professional logic.
-3. SOCRATIC INTENT: Answer the *intent* of the question. For "Challenges", narrate a journey of technical resilience.
-4. APPLE-GRADE QUALITY: The content must feel premium, organic, and human-centric. Avoid AI-sounding fluff. Focus on concrete impact.
+=== SPECIAL INSTRUCTIONS ===
+{instruction or 'Write authentic, high-impact content.'}
 
-=== OUTPUT SCHEMA ===
-Return ONLY a JSON object:
-{{
-  "content": "The refined, high-impact text",
-  "reasoning": "Context bridge + formatting mode used (Plain/Markdown)"
-}}
+=== RULES ===
+1. Use SPECIFIC details from the knowledge base — exact project names, technologies, metrics.
+2. Never invent facts not present in the knowledge base.
+3. Write in first person, as if the applicant is writing.
+4. Make it sound human and authentic, not AI-generated.
+5. Match the tone to the platform ({platform_persona['name']}).
+
+Write ONLY the field content below. No preamble, no explanations, no JSON wrapping — just the content itself:
 """
         try:
-            result = await ai_service.generate_content_async(prompt)
+            # Use the long-form generation method for maximum output
+            result = await ai_service.generate_long_content_async(prompt)
             
-            # Robust JSON cleanup
-            cleaned = result.strip()
-            if cleaned.startswith('```json'): cleaned = cleaned[7:]
-            if cleaned.startswith('```'): cleaned = cleaned[3:]
-            if cleaned.endswith('```'): cleaned = cleaned[:-3]
-            cleaned = cleaned.strip()
+            if not result or not result.strip():
+                raise ValueError("Empty response from AI")
+
+            content = result.strip()
             
-            data = json.loads(cleaned)
+            # Clean any accidental AI preamble
+            preamble_patterns = [
+                'here is', 'here\'s', 'sure,', 'certainly', 'of course',
+                'below is', 'the content:', 'here is the content'
+            ]
+            first_line = content.split('\n')[0].lower()
+            if any(first_line.startswith(p) for p in preamble_patterns):
+                # Remove the preamble line
+                content = '\n'.join(content.split('\n')[1:]).strip()
+            
+            # Strip wrapping quotes
+            if content.startswith('"') and content.endswith('"'):
+                content = content[1:-1].strip()
             
             # Enforce character limit if specified
-            content = data.get('content', '')
             if char_limit and len(content) > char_limit:
-                # Truncate intelligently at word boundary
                 truncated = content[:char_limit-3].rsplit(' ', 1)[0] + '...'
-                data['content'] = truncated
-                data['reasoning'] += f" (Truncated from {len(content)} to {len(truncated)} chars)"
+                content = truncated
                 logger.info("Sparkle content truncated to meet char limit", 
-                           original=len(content), truncated=len(truncated), limit=char_limit)
+                           original=len(result), truncated=len(content), limit=char_limit)
             
-            return data
-        except json.JSONDecodeError as e:
-            logger.error("Sparkle JSON parse failed", error=str(e), raw=result[:200] if result else "None")
-            # Return raw text as fallback
+            # Build reasoning deterministically (no AI tokens wasted on this)
+            reasoning_parts = []
+            if project_context:
+                reasoning_parts.append(f"Based on uploaded document ({len(project_context)} chars)")
+            if user_profile:
+                reasoning_parts.append("profile data included")
+            reasoning_parts.append(f"{field_format} format")
+            reasoning = " | ".join(reasoning_parts)
+
             return {
-                "content": result.strip()[:1000] if result else "",
-                "reasoning": "Generated content (JSON parse failed, showing raw output)"
+                "content": content,
+                "reasoning": reasoning
             }
         except Exception as e:
             logger.error("Sparkle generation failed", error=str(e))
@@ -432,3 +437,4 @@ Return ONLY a JSON object:
 
 
 copilot_service = CopilotService()
+
