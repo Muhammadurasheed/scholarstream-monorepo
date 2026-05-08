@@ -41,3 +41,10 @@ inspect_*.py
 audit_*.py
 surgical_*.py
 
+# Credentials
+backend/serviceAccountKey.json
+scholarstream-gemma4good-firebase-adminsdk-fbsvc-c76e95827f.json
+
+# Python
+*.pyc
+__pycache__/

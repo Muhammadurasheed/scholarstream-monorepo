@@ -14,10 +14,10 @@
 
 ### Key Tasks:
 - [x] Create Public GitHub Repo (`scholarstream-gemma4good`).
-- [ ] Implement `GUEST_MODE` logic in Backend.
-- [ ] Create `populate_demo_guest.py` script for persona injection.
-- [ ] Add "Try Live Demo" button to Frontend/Extension.
-- [ ] Migrate Firestore/Cloud Run to new GCP project.
+- [x] Implement `GUEST_MODE` logic in Backend.
+- [x] Create `populate_demo_guest.py` script for persona injection.
+- [x] Add "Try Live Demo" button to Frontend/Extension.
+- [x] Migrate Firestore/Cloud Run to new GCP project.
 
 ---
 
@@ -30,10 +30,10 @@
 3. **Multi-Platform Extraction**: Fine-tune prompts for Gemma 4 to handle DevPost/DoraHacks HTML.
 
 ### Key Tasks:
-- [ ] Deploy Gemma 4 Inference Server on Google Cloud (Vertex AI/GKE).
-- [ ] Update `ChatService.py` to use the new Gemma endpoint.
-- [ ] Update `ReaderLLM.py` to use Gemma 4 for structured extraction.
-- [ ] Verify "Sentinel" crawler performance with the new engine.
+- [x] Deploy Gemma 4 Inference Server on Google Cloud (Vertex AI Maas).
+- [x] Update `ChatService.py` to use the new Gemma endpoint.
+- [x] Implement native ReAct loop for Gemma 4 (Reasoning Mode).
+- [x] Verify "Sentinel" crawler performance with the new engine.
 
 ---
 

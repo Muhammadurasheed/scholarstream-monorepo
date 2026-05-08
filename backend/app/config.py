@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     debug: bool = Field(default=True, env="DEBUG")
     environment: str = Field(default="development", env="ENVIRONMENT")
     
+    # Hackathon Compliance (Frictionless Discovery Mode)
+    enable_guest_mode: bool = Field(default=True, env="ENABLE_GUEST_MODE")
+    guest_uid: str = Field(default="demo_guest_user", env="GUEST_UID")
+    gemma_engine_enabled: bool = Field(default=False, env="GEMMA_ENGINE_ENABLED")
+    
     # Firebase Configuration
     firebase_project_id: Optional[str] = Field(default=None, env="FIREBASE_PROJECT_ID")
     firebase_private_key_id: Optional[str] = Field(default=None, env="FIREBASE_PRIVATE_KEY_ID")
@@ -89,6 +94,22 @@ class Settings(BaseSettings):
     @property
     def firebase_credentials(self) -> dict:
         """Format Firebase credentials for admin SDK initialization"""
+        # Try loading from JSON file first (Standard GCP Practice)
+        search_paths = [
+            os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"),
+            "serviceAccountKey.json",
+            "../scholarstream-gemma4good-firebase-adminsdk-fbsvc-c76e95827f.json",
+            "scholarstream-gemma4good-firebase-adminsdk-fbsvc-c76e95827f.json",
+            "backend/serviceAccountKey.json"
+        ]
+        
+        for path in search_paths:
+            if path and os.path.exists(path):
+                import json
+                with open(path, 'r') as f:
+                    return json.load(f)
+                
+        # Fallback to individual env variables
         private_key = self.firebase_private_key
         if private_key:
             private_key = private_key.replace('\\n', '\n')

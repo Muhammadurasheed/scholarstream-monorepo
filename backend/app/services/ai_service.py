@@ -32,14 +32,21 @@ from app.models import (
     CompetitionLevel
 )
 
+from app.services.gemma_service import gemma_service
+
 logger = structlog.get_logger()
 
 
 class GeminiAIService:
-    """Google Gemini AI integration for scholarship processing"""
+    """Multi-engine AI service supporting both Gemini and Native Gemma"""
     
     def __init__(self):
-        """Initialize Gemini AI with Upstash Redis support and Vertex AI/API Key fallback"""
+        """Initialize AI engine based on configuration toggle"""
+        self.gemma_active = settings.gemma_engine_enabled
+        if self.gemma_active:
+            logger.info("⚡ GEMMA NATIVE ENGINE ACTIVE (Hackathon Mode)")
+            return
+
         self.use_vertex = False
         
         # FAANG-grade: Allow forcing standard SDK via env (useful for specific API keys)
@@ -201,7 +208,10 @@ class GeminiAIService:
             raise e
 
     async def generate_content_async(self, prompt: str) -> Any:
-        """Async Gemini call with adaptive rate limiting and retry on 429."""
+        """Async call with engine-aware routing."""
+        if self.gemma_active:
+            return await gemma_service.generate_content_async(prompt)
+            
         if not self._check_rate_limit():
             raise Exception("Rate limit exceeded")
         
@@ -236,10 +246,13 @@ class GeminiAIService:
         scholarship: ScrapedScholarship,
         user_profile: UserProfile
     ) -> Optional[AIEnrichmentResponse]:
-        """
-        Use AI to parse and enrich scholarship data
-        Extract structured eligibility, requirements, and calculate match score
-        """
+        """Parse and enrich scholarship data with engine-aware routing"""
+        if self.gemma_active:
+            prompt = self._build_enrichment_prompt(scholarship, user_profile)
+            response_json = await gemma_service.generate_content_async(prompt)
+            content = response_json["choices"][0]["message"]["content"]
+            return self._parse_ai_response(content)
+
         # Check cache first
         cache_key = self._generate_cache_key(scholarship.source_url, user_profile.name)
         cached_enrichment = self._get_cached_enrichment(cache_key)

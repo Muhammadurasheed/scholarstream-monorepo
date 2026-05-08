@@ -8,7 +8,7 @@ from firebase_admin import credentials, firestore
 from app.config import settings
 
 async def populate_demo_guest():
-    print("🚀 Initializing Demo Persona...")
+    print("Initializing Demo Persona...")
     
     # Initialize Firebase if not already done
     if not firebase_admin._apps:
@@ -54,7 +54,7 @@ async def populate_demo_guest():
     
     # Save to Firestore
     db.collection('users').document(guest_uid).set(demo_profile)
-    print(f"✅ Demo Persona 'Musa' injected successfully (UID: {guest_uid})")
+    print(f"Demo Persona 'Musa' injected successfully (UID: {guest_uid})")
 
 if __name__ == "__main__":
     asyncio.run(populate_demo_guest())

@@ -32,8 +32,14 @@ Architecture:
 Design: Google-grade Agentic Workflow. The model decides the path.
 """
 
-import google.generativeai as genai
-from google.generativeai.types import FunctionDeclaration, Tool, HarmCategory, HarmBlockThreshold
+try:
+    import google.generativeai as genai
+    from google.generativeai.types import FunctionDeclaration, Tool, HarmCategory, HarmBlockThreshold
+except ImportError:
+    # Optional for Gemma-only environments
+    genai = None
+    FunctionDeclaration = Tool = HarmCategory = HarmBlockThreshold = None
+
 import json
 import asyncio
 from typing import Dict, Any, List, Optional
@@ -767,7 +773,11 @@ Eager Discovery Plan:
                 used_ids.add(item['id'])
 
         return final
-
-# Instantiate
-chat_service = ReActChatService()
-
+# Instance
+if settings.gemma_engine_enabled:
+    from app.services.gemma_chat_service import gemma_chat_service
+    chat_service = gemma_chat_service
+    logger.info("ScholarStream is running on GEMMA 4 NATIVE ENGINE")
+else:
+    chat_service = ReActChatService()
+    logger.info("ScholarStream is running on GEMINI ENGINE")
