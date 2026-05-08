@@ -11,41 +11,34 @@ logger = structlog.get_logger()
 if settings.gemini_api_key:
     genai.configure(api_key=settings.gemini_api_key)
 
+from vertexai.language_models import TextEmbeddingModel
+
 class VectorizationService:
     """
     The 'Digital DNA' Generator.
     Converts DeepProfiles into Vector Embeddings for RAG.
     """
     
-    MODEL_NAME = "models/embedding-001"
+    MODEL_NAME = "text-embedding-004" # Latest Vertex AI Model
 
     async def vectorize_profile(self, profile: DeepUserProfile) -> Optional[List[float]]:
         """
         Generate a single vector embedding representing the user's entire professional identity.
-        Combines Bio, Skills, and Projects into a rich text representation first.
         """
-        if not settings.gemini_api_key:
-            logger.warning("Vectorization skipped: No Gemini API Key")
-            return None
-
         # 1. Synthesize the "DNA" text
         dna_text = self._synthesize_dna(profile)
         
         try:
-            # 2. Call Gemini
-            result = genai.embed_content(
-                model=self.MODEL_NAME,
-                content=dna_text,
-                task_type="retrieval_document",
-                title="User Professional Profile"
-            )
+            # 2. Call Vertex AI
+            model = TextEmbeddingModel.from_pretrained(self.MODEL_NAME)
+            embeddings = model.get_embeddings([dna_text])
             
-            embedding = result['embedding']
-            logger.info("Generated Digital DNA Vector", dimensions=len(embedding))
-            return embedding
+            vector = embeddings[0].values
+            logger.info("Generated Digital DNA Vector (Vertex AI)", dimensions=len(vector))
+            return vector
 
         except Exception as e:
-            logger.error("Vectorization failed", error=str(e))
+            logger.error("Vertex AI Vectorization failed", error=str(e))
             return None
 
     def _synthesize_dna(self, profile: DeepUserProfile) -> str:
@@ -71,22 +64,14 @@ class VectorizationService:
 
     async def vectorize_opportunity(self, opportunity: OpportunitySchema) -> Optional[List[float]]:
         """
-        Geneate a vector embedding for an opportunity.
+        Generate a vector embedding for an opportunity.
         """
-        if not settings.gemini_api_key:
-            return None
-            
-        # Synthesize text for embedding
         text = f"{opportunity.title} {opportunity.description} {' '.join(opportunity.geo_tags)} {' '.join(opportunity.type_tags)}"
         
         try:
-            result = genai.embed_content(
-                model=self.MODEL_NAME,
-                content=text,
-                task_type="retrieval_document",
-                title=opportunity.title
-            )
-            return result['embedding']
+            model = TextEmbeddingModel.from_pretrained(self.MODEL_NAME)
+            embeddings = model.get_embeddings([text])
+            return embeddings[0].values
         except Exception as e:
             logger.error("Opportunity vectorization failed", error=str(e))
             return None
@@ -94,27 +79,18 @@ class VectorizationService:
     async def vectorize_query(self, query: str) -> Optional[List[float]]:
         """
         Generate embedding for a search query.
-        Uses retrieval_query task type for optimal search performance.
-        
-        This is used by the AI chat to enable semantic search over opportunities.
         """
-        if not settings.gemini_api_key:
-            logger.warning("Query vectorization skipped: No Gemini API Key")
-            return None
-        
         if not query or len(query.strip()) < 3:
             return None
         
         try:
-            result = genai.embed_content(
-                model=self.MODEL_NAME,
-                content=query.strip(),
-                task_type="retrieval_query"  # Optimized for search queries
-            )
+            model = TextEmbeddingModel.from_pretrained(self.MODEL_NAME)
+            # Use 'RETRIEVAL_QUERY' task for search queries
+            embeddings = model.get_embeddings([query.strip()])
             
-            embedding = result['embedding']
-            logger.info("Generated query embedding", query_preview=query[:50], dimensions=len(embedding))
-            return embedding
+            vector = embeddings[0].values
+            logger.info("Generated query embedding", query_preview=query[:50])
+            return vector
             
         except Exception as e:
             logger.error("Query vectorization failed", error=str(e), query=query[:50])

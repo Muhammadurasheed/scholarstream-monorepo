@@ -183,6 +183,9 @@ async def map_form_fields(
             
             from app.services.copilot_service import copilot_service
             
+            # Inject user_id for evidence lookups
+            user_profile['user_id'] = user_id
+            
             # Pass project_context and instruction to generate_field_content
             result = await copilot_service.generate_field_content(
                 target_field=request.target_field,

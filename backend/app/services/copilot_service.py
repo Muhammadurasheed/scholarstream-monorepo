@@ -355,11 +355,26 @@ CURRENT PAGE:
         else:
             format_directive = "STRICT PLAIN TEXT. No markdown symbols (no **, #, `, _). Use clean sentence structure and natural emphasis through word choice."
 
+        # EVIDENCE INJECTION (Phase 3 Moat)
+        from app.services.evidence_engine import evidence_engine
+        # Use field label/category as search query for evidence
+        evidence_query = f"{target_field.get('label', '')} {field_category}"
+        # Note: We need user_id here. For extension routes, we'll need to pass it in.
+        # As an MVP, we'll use the user_profile's name to find hits or skip if no ID.
+        user_id = user_profile.get('user_id') if user_profile else None
+        evidence_text = ""
+        if user_id:
+            evidence = await evidence_engine.get_relevant_evidence(user_id, evidence_query)
+            if evidence:
+                evidence_text = "=== HIGH-IMPACT EVIDENCE (Prioritize these facts) ===\n" + "\n".join([f"- {e}" for e in evidence])
+
         prompt = f"""You are a world-class application writer specializing in {platform_persona.get('expertise', 'opportunity applications')}.
 
 TASK: Write the content for the "{target_field.get('label', field_category)}" field.
 
 === YOUR KNOWLEDGE BASE ===
+
+{evidence_text}
 
 User Background:
 {json.dumps(user_profile, indent=2) if user_profile else 'Not provided.'}
