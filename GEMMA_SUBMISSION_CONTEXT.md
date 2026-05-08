@@ -14,10 +14,10 @@ We activated the `enable_thinking: true` parameter in the Gemma 4 chat template.
 - **Effect**: This allows the Scholar-Einstein agent to perform **Internal Monologue** (hidden reasoning) before presenting a final advice to the student.
 - **Impact**: Crucial for the "Impact Track" to show that the AI isn't just generating text, but is "pondering" the financial and academic constraints of the user.
 
-### 3. Native ReAct Loop (Autonomous Agency)
-We implemented a manual **Reason-Act-Observe** loop in the backend.
-- Gemma 4 autonomously identifies when it needs data.
-- It calls `vector_search` (Semantic Matching) or `search_database` (Structured Filtering) via native OpenAI-style tool calling.
+### 3. Native ReAct Loop & Agentic Match Blending
+- **Mechanism**: We implemented a manual **Reason-Act-Observe** loop in the backend.
+- **Blending Moat**: ScholarStream doesn't just "chat." It performs **Agentic Match Blending**. It takes a statistical keyword score (30%) and blends it with a Gemma 4 qualitative "Counselor Report" (70%).
+- **Outcome**: Students receive a "Counselor Report" that explains *why* they match, identifies their profile *gaps*, and provides a 3-step *action plan* to win.
 - **Verification**: Successfully tested on Nigerian scholarship queries where the model identified regional context and used the correct retrieval tools.
 
 ### 4. Infrastructure Security & Migration

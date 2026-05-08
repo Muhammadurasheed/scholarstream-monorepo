@@ -46,8 +46,9 @@
 3. **Contextual Knowledge**: Optimize the multi-doc RAG (Research Papers + Resume + Page Context).
 
 ### Key Tasks:
-- [ ] Implement Typewriter effect in `content/index.ts`.
-- [ ] Add the "Refinement Overlay" UI to the extension.
+- [x] Implement Premium Typewriter effect with variable speed.
+- [x] Integrate Typewriter effect into Bulk Autofill.
+- [x] Add Glassmorphism "Refinement Overlay" to the extension.
 - [ ] Benchmark "Gemma-powered" essay generation vs. Gemini.
 
 ---
