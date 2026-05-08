@@ -14,7 +14,7 @@ import ssLogo from '@/asset/ss_logo.png';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn, user, isOnboardingComplete } = useAuth();
+  const { signIn, user, isOnboardingComplete, setDemoUser } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -189,6 +189,23 @@ const Login = () => {
 
               <Button type="submit" className="w-full" size="lg" disabled={loading}>
                 {loading ? 'Logging in...' : 'Log In'}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-12 bg-slate-900/50 border-slate-700 hover:bg-slate-800 text-blue-400 hover:text-blue-300 gap-2 font-medium"
+                size="lg"
+                onClick={async () => {
+                  await setDemoUser();
+                  toast({
+                    title: 'Frictionless Mode Active',
+                    description: 'Welcome to the live demo of ScholarStream.',
+                  });
+                }}
+              >
+                <Sparkles className="h-5 w-5" />
+                Try Live Demo
               </Button>
 
               <div className="relative">

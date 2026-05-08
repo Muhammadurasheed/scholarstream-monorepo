@@ -620,12 +620,42 @@ export default function App() {
     };
 
 
-    // Get context status color
-    const getContextStatusColor = () => {
-        const { profileCompleteness, hasDocument } = contextStatus;
-        if (profileCompleteness >= 70 && hasDocument) return 'bg-green-500';
-        if (profileCompleteness >= 40 || hasDocument) return 'bg-yellow-500';
-        return 'bg-red-500';
+    // Frictionless Discovery Mode (Hackathon Demo Path)
+    const handleDemoMode = async () => {
+        setLoading(true);
+        try {
+            // Set the magic guest token
+            setAuthToken('GUEST_TOKEN');
+            const storage = getStorage();
+            if (storage) await storage.set({ authToken: 'GUEST_TOKEN' });
+            
+            // Inject demo persona (Musa)
+            const guestProfile = {
+                uid: 'demo_guest_user',
+                name: 'Musa Ibrahim',
+                email: 'musa.demo@scholarstream.app',
+                academic_status: 'Undergraduate',
+                major: 'Computer Science',
+                school: 'University of Lagos',
+                year: 'Junior (Year 3)',
+                gpa: '3.85',
+                profile_completeness: 85,
+                bio: "3rd-year Computer Science student at University of Lagos. Passionate about AI for social good.",
+                skills: ["Python", "React", "AI"],
+                interests: ["Sustainability", "FinTech"]
+            };
+            
+            if (storage) await storage.set({ userProfile: guestProfile });
+            setUserProfile(guestProfile);
+            
+            setMessages(prev => [...prev, {
+                id: Date.now().toString(),
+                role: 'assistant',
+                text: '✨ **Frictionless Discovery Mode Active!**\n\nI have loaded a pre-verified profile for **Musa Ibrahim**. You can now test my semantic matching and form-filling capabilities instantly!'
+            }]);
+        } finally {
+            setLoading(false);
+        }
     };
 
     // --- UNIFIED AUTH LANDING (No Token) ---
@@ -653,6 +683,15 @@ export default function App() {
                         >
                             <span>Launch Web App</span>
                             <LogIn className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                        </button>
+
+                        <button
+                            onClick={handleDemoMode}
+                            disabled={loading}
+                            className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium py-3 rounded-xl border border-slate-700 transition-all flex justify-center items-center gap-2 group active:scale-95"
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-blue-400" />}
+                            <span>Try Live Demo</span>
                         </button>
 
                         <p className="text-xs text-slate-600 text-center">

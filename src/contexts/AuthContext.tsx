@@ -22,6 +22,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  setDemoUser: () => Promise<void>;
   isOnboardingComplete: () => boolean;
 }
 
@@ -198,12 +199,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const setDemoUser = async () => {
+    setLoading(true);
+    try {
+      const guestUser: User = {
+        uid: 'demo_guest_user',
+        email: 'musa.demo@scholarstream.app',
+        name: 'Musa Ibrahim'
+      };
+      setUser(guestUser);
+      localStorage.setItem('scholarstream_auth_token', 'GUEST_TOKEN');
+      localStorage.setItem('scholarstream_onboarding_complete', 'true');
+      window.dispatchEvent(new Event('storage'));
+      
+      // Notify extension via Zero-Touch Sync
+      syncAuthToExtension('GUEST_TOKEN', guestUser);
+      
+      console.log('✨ [AUTH] Frictionless Discovery Mode activated (Demo User)');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const isOnboardingComplete = () => {
     return localStorage.getItem('scholarstream_onboarding_complete') === 'true';
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, isOnboardingComplete }}>
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, setDemoUser, isOnboardingComplete }}>
       {children}
     </AuthContext.Provider>
   );
