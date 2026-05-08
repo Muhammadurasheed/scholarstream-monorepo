@@ -458,14 +458,17 @@ class FocusEngine {
             position: absolute;
             display: none;
             z-index: 2147483647;
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            border: 1px solid #3b82f6;
-            border-radius: 12px;
-            padding: 12px;
-            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
-            min-width: 320px;
-            max-width: 420px;
-            font-family: system-ui, -apple-system, sans-serif;
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px) saturate(180%);
+            -webkit-backdrop-filter: blur(12px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 15px rgba(99, 102, 241, 0.1);
+            min-width: 340px;
+            max-width: 440px;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            animation: ss-fade-in-up 0.3s ease-out;
         `;
 
         // Add internal style for scrollbar in the overlay
@@ -488,24 +491,34 @@ class FocusEngine {
         overlay.appendChild(style);
 
         overlay.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                <div style="width: 24px; height: 24px; background: linear-gradient(135deg, #FF6B6B, #4ECDC4); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"></path></svg>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                <div style="width: 28px; height: 28px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"></path></svg>
                 </div>
-                <span style="font-size: 13px; font-weight: 600; color: #e2e8f0; font-family: system-ui, sans-serif;">Refine Content</span>
-                <button id="ss-refinement-close" style="margin-left: auto; background: none; border: none; color: #64748b; cursor: pointer; font-size: 18px; padding: 0;">×</button>
+                <div style="display: flex; flex-direction: column;">
+                    <span style="font-size: 13px; font-weight: 700; color: #f8fafc; font-family: 'Inter', system-ui, sans-serif; letter-spacing: -0.01em;">Gemma Refinement</span>
+                    <span style="font-size: 10px; color: #94a3b8; font-family: 'Inter', system-ui, sans-serif;">Precision Tuning Powered by Gemma 4</span>
+                </div>
+                <button id="ss-refinement-close" style="margin-left: auto; background: rgba(255,255,255,0.05); border: none; color: #94a3b8; cursor: pointer; font-size: 14px; width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">×</button>
             </div>
             <textarea 
                 id="ss-refinement-input" 
-                placeholder="e.g., Make it more detailed, add my Python experience..."
-                style="width: 100%; padding: 10px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 13px; font-family: system-ui, sans-serif; outline: none; box-sizing: border-box; min-height: 42px; max-height: 120px; resize: none; overflow-y: auto; line-height: 1.4;"
+                placeholder="How should Gemma refine this? (e.g. 'Make it more professional')"
+                style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(51, 65, 85, 0.8); border-radius: 10px; color: #f1f5f9; font-size: 13px; font-family: 'Inter', system-ui, sans-serif; outline: none; box-sizing: border-box; min-height: 50px; max-height: 150px; resize: none; overflow-y: auto; line-height: 1.5; transition: border-color 0.2s, box-shadow 0.2s;"
                 rows="1"
             ></textarea>
-            <div style="display: flex; gap: 8px; margin-top: 10px;">
-                <button id="ss-refinement-expand" style="flex: 1; padding: 8px 12px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #94a3b8; font-size: 12px; cursor: pointer; font-family: system-ui, sans-serif;">📝 More detailed</button>
-                <button id="ss-refinement-concise" style="flex: 1; padding: 8px 12px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #94a3b8; font-size: 12px; cursor: pointer; font-family: system-ui, sans-serif;">✂️ More concise</button>
-                <button id="ss-refinement-submit" style="flex: 1; padding: 8px 12px; background: #3b82f6; border: none; border-radius: 6px; color: white; font-size: 12px; font-weight: 600; cursor: pointer; font-family: system-ui, sans-serif;">Refine ✨</button>
+            <div style="display: flex; gap: 8px; margin-top: 12px;">
+                <button id="ss-refinement-expand" style="flex: 1; padding: 8px; background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(51, 65, 85, 0.5); border-radius: 8px; color: #cbd5e1; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: 'Inter', system-ui, sans-serif;">📝 Expand</button>
+                <button id="ss-refinement-concise" style="flex: 1; padding: 8px; background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(51, 65, 85, 0.5); border-radius: 8px; color: #cbd5e1; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: 'Inter', system-ui, sans-serif;">✂️ Concise</button>
+                <button id="ss-refinement-submit" style="flex: 1.5; padding: 8px; background: #6366f1; border: none; border-radius: 8px; color: white; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); font-family: 'Inter', system-ui, sans-serif;">Refine with AI ✨</button>
             </div>
+            <style>
+                #ss-refinement-input:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2) !important; }
+                #ss-refinement-expand:hover, #ss-refinement-concise:hover { background: rgba(51, 65, 85, 0.8) !important; color: #fff !important; }
+                #ss-refinement-submit:hover { transform: translateY(-1px); background: #4f46e5 !important; box-shadow: 0 6px 15px rgba(99, 102, 241, 0.4) !important; }
+                #ss-refinement-submit:active { transform: translateY(0); }
+                #ss-refinement-close:hover { background: rgba(239, 68, 68, 0.2) !important; color: #ef4444 !important; }
+            </style>
         `;
         document.body.appendChild(overlay);
 
@@ -1184,28 +1197,109 @@ IMPORTANT:
         ).slice(0, 100);
     }
 
-    private async typewriterEffect(element: HTMLInputElement | HTMLTextAreaElement, text: string) {
+    public async typewriterEffect(element: HTMLInputElement | HTMLTextAreaElement, text: string) {
+        if (!element || !text) return;
+        
         element.value = "";
         element.focus();
 
-        const speed = Math.max(10, Math.min(50, 1000 / text.length));
+        // Natural typing speed: Faster for long text, slightly variable for realism
+        const baseSpeed = Math.max(5, Math.min(30, 800 / text.length));
+        
+        // Visual indicator: Subtle pulse while typing
+        const originalTransition = element.style.transition;
+        const originalShadow = element.style.boxShadow;
+        element.style.transition = "box-shadow 0.3s ease";
+        element.style.boxShadow = "0 0 0 2px rgba(78, 205, 196, 0.4)";
 
         for (let i = 0; i < text.length; i++) {
+            // Check if user has taken over (rudimentary check)
+            if (i > 0 && element.value.length < i) {
+                console.log("[Sparkle] User intervention detected. Aborting typewriter.");
+                break;
+            }
+            
             element.value += text.charAt(i);
             element.dispatchEvent(new Event('input', { bubbles: true }));
-            if (element.scrollTop !== undefined) element.scrollTop = element.scrollHeight;
+            
+            // Scroll to bottom as we type
+            if (element.tagName === 'TEXTAREA') {
+                element.scrollTop = element.scrollHeight;
+            }
 
-            await new Promise(r => setTimeout(r, speed + Math.random() * 10));
+            // Variable delay for "human" feel
+            const variance = Math.random() * 15;
+            const pauseChance = Math.random() > 0.98 ? 100 : 0; // Occasional pause
+            await new Promise(r => setTimeout(r, baseSpeed + variance + pauseChance));
         }
+        
         element.dispatchEvent(new Event('change', { bubbles: true }));
 
-        // FIXED: Use outline for success indicator instead of background (dark theme compatible)
-        element.style.outline = "2px solid #22c55e";
-        element.style.outlineOffset = "1px";
+        // Success Indicator: Google-grade green glow
+        element.style.boxShadow = "0 0 0 2px rgba(34, 197, 94, 0.6)";
+        element.style.outline = "none";
+        
         setTimeout(() => {
-            element.style.outline = "";
-            element.style.outlineOffset = "";
-        }, 2000);
+            element.style.boxShadow = originalShadow;
+            element.style.transition = originalTransition;
+        }, 1500);
+    }
+
+    public async handleBulkAutofill(projectContext?: string) {
+        const allInputs: HTMLElement[] = [];
+        document.querySelectorAll('input, select, textarea').forEach(el => allInputs.push(el as HTMLElement));
+        document.querySelectorAll('[contenteditable="true"]').forEach(el => allInputs.push(el as HTMLElement));
+
+        const formFields = allInputs.map((el: any) => ({
+            id: el.id || '',
+            name: el.name || '',
+            type: el.type || el.tagName.toLowerCase(),
+            placeholder: el.placeholder || '',
+            label: (el.labels?.[0]?.textContent || el.placeholder || el.name || '').slice(0, 100),
+            selector: uniqueSelector(el)
+        })).filter(f => !['hidden', 'submit', 'button', 'file'].includes(f.type));
+
+        const storage = getStorage();
+        if (!storage) return { success: false, error: "Context lost" };
+
+        try {
+            const stored = await storage.get(['userProfile', 'authToken']);
+            if (!stored.authToken) return { success: false, error: "Not authenticated" };
+
+            // Show "AI Working" feedback
+            console.log("🚀 [Sparkle] Starting Bulk Autofill...");
+            
+            const response = await hardenedFetch(ENDPOINTS.mapFields, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${stored.authToken}`
+                },
+                body: JSON.stringify({
+                    form_fields: formFields,
+                    user_profile: stored.userProfile || {},
+                    project_context: projectContext
+                })
+            });
+
+            const data = await response.json();
+            const mappings = data.field_mappings || {};
+
+            // Sequential typewriter effect for that "AI magic" feel
+            for (const [selector, value] of Object.entries(mappings)) {
+                try {
+                    const el = document.querySelector(selector) as HTMLInputElement | HTMLTextAreaElement;
+                    if (el && value) {
+                        const sanitized = AppleSanitizer.sanitize(String(value), 'plain');
+                        await this.typewriterEffect(el, sanitized);
+                    }
+                } catch (e) { }
+            }
+            return { success: true };
+        } catch (error) {
+            console.error("Bulk Fill Failed", error);
+            return { success: false, error: String(error) };
+        }
     }
 }
 
@@ -1248,7 +1342,7 @@ class AppleSanitizer {
 }
 
 // Initialize Focus Engine
-new FocusEngine();
+const focusEngine = new FocusEngine();
 
 /**
  * Distinguished context resolution Helper - The 'Einstein' Brain
@@ -1457,62 +1551,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === 'GET_PAGE_CONTEXT') {
         sendResponse(getPageContext());
     } else if (message.type === 'AUTO_FILL_REQUEST') {
-        handleAutoFill(message.projectContext).then(sendResponse);
+        focusEngine.handleBulkAutofill(message.projectContext).then(sendResponse);
         return true;
     }
 });
 
-async function handleAutoFill(projectContext?: string) {
-    const allInputs: HTMLElement[] = [];
-    document.querySelectorAll('input, select, textarea').forEach(el => allInputs.push(el as HTMLElement));
-    document.querySelectorAll('[contenteditable="true"]').forEach(el => allInputs.push(el as HTMLElement));
-
-    const formFields = allInputs.map((el: any) => ({
-        id: el.id || '',
-        name: el.name || '',
-        type: el.type || el.tagName.toLowerCase(),
-        placeholder: el.placeholder || '',
-        label: (el.labels?.[0]?.textContent || el.placeholder || el.name || '').slice(0, 100),
-        selector: uniqueSelector(el)
-    })).filter(f => !['hidden', 'submit', 'button', 'file'].includes(f.type));
-
-    const storage = getStorage();
-    if (!storage) return { success: false, error: "Context lost" };
-
-    try {
-        const stored = await storage.get(['userProfile', 'authToken']);
-        if (!stored.authToken) return { success: false, error: "Not authenticated" };
-
-        const response = await hardenedFetch(ENDPOINTS.mapFields, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${stored.authToken}`
-            },
-            body: JSON.stringify({
-                form_fields: formFields,
-                user_profile: stored.userProfile || {},
-                project_context: projectContext
-            })
-        });
-
-        const data = await response.json();
-        const mappings = data.field_mappings || {};
-
-        for (const [selector, value] of Object.entries(mappings)) {
-            try {
-                const el = document.querySelector(selector) as HTMLInputElement;
-                if (el && value) {
-                    el.value = String(value);
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            } catch (e) { }
-        }
-        return { success: true };
-    } catch (error) {
-        return { success: false, error: String(error) };
-    }
-}
 
 // Initialization icon (restricted to scholarship pages)
 if (document.body.innerText.match(/scholarship|hackathon|grant|devpost|dorahacks/i)) {
