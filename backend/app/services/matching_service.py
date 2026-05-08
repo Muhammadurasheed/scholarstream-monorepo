@@ -98,7 +98,29 @@ class OpportunityMatchingService:
             # Step 5: Filter and rank
             matched_opportunities = self._filter_and_rank(opportunities, user_profile)
             
-            # Step 6: Store in database
+            # Step 6: Agentic Augmentation (Phase 3 Moat)
+            # Pick the top 5 high-potential matches and generate a deep counselor report
+            from app.services.gemma_matching_service import gemma_matching_service
+            
+            for i, opp in enumerate(matched_opportunities[:5]):
+                try:
+                    logger.info("Generating Agentic Report", index=i+1, opp_id=opp.id)
+                    report = await gemma_matching_service.generate_match_report(opp, user_profile)
+                    opp.gemma_report = report
+                    
+                    # Update score if Gemma found it significantly different
+                    if report.get("score") and report["score"] != "N/A":
+                        try:
+                            gemma_score = float(report["score"])
+                            # Blend: 70% Gemma qualitative, 30% Engine quantitative
+                            opp.match_score = int((gemma_score * 0.7) + (opp.match_score * 0.3))
+                            opp.match_tier = self.get_match_tier(opp.match_score)
+                        except ValueError:
+                            pass
+                except Exception as e:
+                    logger.error("Failed to generate agentic report", error=str(e), opp_id=opp.id)
+            
+            # Step 7: Store in database
             for opp in matched_opportunities:
                 await db.save_scholarship(opp)
             

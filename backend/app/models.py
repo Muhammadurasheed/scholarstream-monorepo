@@ -33,6 +33,9 @@ class UserProfile(BaseModel):
     state: Optional[str] = None
     city: Optional[str] = None
     
+    # Sentinel Settings
+    patrol_enabled: bool = Field(False, description="Enable autonomous scouting and matching")
+    
     @validator('gpa')
     def validate_gpa(cls, v):
         if v is not None and (v < 0 or v > 4.0):
@@ -145,6 +148,9 @@ class OpportunitySchema(BaseModel):
 
     # Vectorization
     embedding: Optional[List[float]] = Field(None, description="768-dim vector embedding")
+    
+    # Agentic Insights (The "Gemma Moat")
+    gemma_report: Optional[Dict[str, Any]] = Field(None, description="Counselor report from Gemma 4 (Score, Synthesis, Gap, Action Plan)")
     
     # Raw Eligibility (for deeper checks)
     eligibility_text: Optional[str] = None
