@@ -99,6 +99,17 @@ def start_scheduler():
         replace_existing=True
     )
     
+    # Schedule Scholar Sentinel patrol every 12 hours
+    from app.services.scholar_sentinel import scholar_sentinel
+    scheduler.add_job(
+        scholar_sentinel.run_patrol_for_all_users,
+        'interval',
+        hours=12,
+        id='scholar_sentinel_patrol',
+        replace_existing=True,
+        max_instances=1
+    )
+    
     scheduler.start()
     logger.info("Background job scheduler started")
 

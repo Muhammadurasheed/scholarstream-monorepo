@@ -659,6 +659,54 @@ class FirebaseDB:
             return []
 
 
+    async def get_patrolling_users(self) -> List[Dict[str, Any]]:
+        """Fetch all users who have patrol_enabled=True"""
+        try:
+            # Query users where profile.patrol_enabled is True
+            docs = self.db.collection('users')\
+                .where('profile.patrol_enabled', '==', True)\
+                .stream()
+            
+            users = []
+            for doc in docs:
+                data = doc.to_dict()
+                users.append({
+                    'id': doc.id,
+                    'profile': data.get('profile', {})
+                })
+            
+            logger.info("Fetched patrolling users", count=len(users))
+            return users
+        except Exception as e:
+            logger.error("Failed to fetch patrolling users", error=str(e))
+            return []
+
+    async def save_sentinel_hits(self, user_id: str, hits: List[Dict[str, Any]]) -> bool:
+        """Save new hits discovered by the Scholar Sentinel"""
+        try:
+            doc_ref = self.db.collection('sentinel_hits').document(user_id)
+            doc_ref.set({
+                'hits': firestore.ArrayUnion(hits),
+                'last_updated': firestore.SERVER_TIMESTAMP
+            }, merge=True)
+            logger.info("Sentinel hits saved", user_id=user_id, count=len(hits))
+            return True
+        except Exception as e:
+            logger.error("Failed to save sentinel hits", user_id=user_id, error=str(e))
+            return False
+
+    async def get_user_match_ids(self, user_id: str) -> List[str]:
+        """Get just the IDs of matched scholarships for a user"""
+        try:
+            doc_ref = self.db.collection('user_matches').document(user_id)
+            doc = doc_ref.get()
+            if doc.exists:
+                return doc.to_dict().get('scholarship_ids', [])
+            return []
+        except Exception as e:
+            logger.error("Failed to fetch match IDs", user_id=user_id, error=str(e))
+            return []
+            
 # Global database instance
 db = FirebaseDB()
 
