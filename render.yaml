@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: scholarstream-backend
+    runtime: python
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      # Add these in Render dashboard:
+      # - FIREBASE_PROJECT_ID
+      # - FIREBASE_PRIVATE_KEY_ID
+      # - FIREBASE_PRIVATE_KEY
+      # - FIREBASE_CLIENT_EMAIL
+      # - FIREBASE_CLIENT_ID
+      # - FIREBASE_AUTH_URI
+      # - FIREBASE_TOKEN_URI
+      # - FIREBASE_AUTH_PROVIDER_X509_CERT_URL
+      # - FIREBASE_CLIENT_X509_CERT_URL
+      # - GEMINI_API_KEY
+      # - GEMINI_MODEL
+      # - UPSTASH_REDIS_REST_URL
+      # - UPSTASH_REDIS_REST_TOKEN
+      # - CORS_ORIGINS
+      # - CLOUDINARY_CLOUD_NAME
+      # - CLOUDINARY_API_KEY
+      # - CLOUDINARY_API_SECRET
+    healthCheckPath: /health
+    autoDeploy: true

@@ -1,0 +1,37 @@
+=== PERSONALIZATION VERIFICATION PROOF ===
+
+[User A: The Coder]
+2025-12-19 01:45:27 [debug    ] Interest scoring               matched=['ai', 'python', 'hackathons'] rate=0.8999999999999999 user_interests=['ai', 'coding', 'python', 'hackathons']
+2025-12-19 01:45:27 [debug    ] Personalization score calculated academic_score=100.0 demographic_score=100.0 final_score=66.0 interest_score=89.99999999999999 opportunity=Global AI Hackathon passion_score=0.0
+2025-12-19 01:45:27 [debug    ] Interest scoring               matched=[] rate=0.0 user_interests=['ai', 'coding', 'python', 'hackathons']
+2025-12-19 01:45:27 [debug    ] Personalization score calculated academic_score=60.0 demographic_score=0.0 final_score=6.0 interest_score=0.0 opportunity=Future of Design Award passion_score=0.0
+Match for AI Hackathon: 66.0%
+Match for Design Award: 30.0%
+
+[User B: The Designer]
+2025-12-19 01:45:27 [debug    ] Interest scoring               matched=[] rate=0.0 user_interests=['design', 'art', 'ui/ux', 'sketching']
+2025-12-19 01:45:27 [debug    ] Personalization score calculated academic_score=100.0 demographic_score=0.0 final_score=10.0 interest_score=0.0 opportunity=Global AI Hackathon passion_score=0.0
+2025-12-19 01:45:27 [debug    ] Interest scoring               matched=['design', 'art', 'ui/ux'] rate=0.8999999999999999 user_interests=['design', 'art', 'ui/ux', 'sketching']
+2025-12-19 01:45:27 [debug    ] Personalization score calculated academic_score=60.0 demographic_score=100.0 final_score=61.99999999999999 interest_score=89.99999999999999 opportunity=Future of Design Award passion_score=0.0
+Match for AI Hackathon: 30.0%
+Match for Design Award: 62.0%
+Traceback (most recent call last):
+  File "C:\Users\HP\Documents\scholarstream-ai\backend\scripts\verify_personalization.py", line 63, in <module>
+    asyncio.run(verify_personalization())
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\miniconda3\Lib\asyncio\runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\ProgramData\miniconda3\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\ProgramData\miniconda3\Lib\asyncio\base_events.py", line 725, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "C:\Users\HP\Documents\scholarstream-ai\backend\scripts\verify_personalization.py", line 58, in verify_personalization
+    print("\n\u2705 PASSED: System correctly prioritizes relevant opportunities based on profile.")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\miniconda3\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 2: character maps to <undefined>

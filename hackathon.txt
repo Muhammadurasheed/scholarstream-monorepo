@@ -1,0 +1,145 @@
+🚀 Are you ready to push the boundaries of what’s possible in the cloud?
+Join us for a high-energy hackathon where Google Cloud takes center stage. This is your chance to experiment with cutting-edge AI, machine learning, and cloud technologies built to help you create, scale, and launch transformative ideas.
+
+Tap into powerful data analytics, secure storage, and enterprise-grade security while exploring curated and public datasets. With Google Cloud’s advanced AI tools at your fingertips, you’ll have everything you need to turn bold concepts into breakthrough projects.
+
+We're thrilled to be partnering with Datadog, Confluent, and ElevenLabs for this hackathon!
+Requirements
+WHAT TO BUILD
+Build a new working application that tackles one of the challenges provided by one of the partners. Your submission must integrate both Google Cloud products (Vertex AI, Gemini, etc.) and the specific Partner’s technologies to deliver a compelling and innovative solution. 
+
+Datadog Challenge: Using Datadog, implement an innovative end-to-end observability monitoring strategy for an LLM application powered by Vertex AI or Gemini.(new or reused) Stream LLM and/or runtime telemetry to Datadog, define detection rules, and present a clear dashboard that surfaces application health and the observability/security signals you consider essential. When any detection rule is triggered, leverage Datadog to define an actional item (e.g., case, incident, alert, etc.) with context for an AI engineer to act on.
+
+
+Confluent Challenge: Unleash the power of AI on data in motion! Your challenge is to build a next-generation AI application using Confluent and Google Cloud. Apply advanced AI/ML models to any real-time data stream to generate predictions, create dynamic experiences, or solve a compelling problem in a novel way. Demonstrate how real-time data unlocks real-world challenges with AI.
+
+
+ElevenLabs Challenge: Use ElevenLabs and Google Cloud AI to make your app conversational, intelligent, and voice-driven. Combine ElevenLabs Agents with Google Cloud Vertex AI or Gemini to give your app a natural, human voice and personality — enabling users to interact entirely through speech. You can integrate ElevenLabs’ APIs directly into your app using our React SDK or via server-side calls hosted on Google Cloud.
+
+Please double check our Resources tab for full details of all challenges. 
+
+WHAT TO SUBMIT
+Include a URL to the hosted Project for judging and testing.
+
+Include a URL to your code repository for judging and testing. 
+
+The repository must contain all necessary source code, assets, and instructions required for the project to be functional. The repository must be public and open source by including an open source license file. This license should be detectable and visible at the top of the repository page (in the About section).  
+
+Include a demo video (3 minutes). Videos must be uploaded to YouTube or Vimeo, and made public.
+
+Judges will not be required to watch beyond 3 minutes
+
+Select which challenge you’ll be submitting for.
+
+Your completed Devpost submission form.
+
+Please check the Official Rules for full details.
+
+ABOUT THE PARTNERS
+Datadog
+Datadog is the essential monitoring platform for cloud applications. We bring together data from servers, containers, databases, and third-party services to make your stack entirely observable. These capabilities help DevOps teams avoid downtime, resolve performance issues, and ensure customers are getting the best user experience.
+
+Confluent
+Confluent is the data streaming platform that lets organizations stream, connect, process, and govern real-time data across clouds, on-premises, and the edge. Built on Apache Kafka®️, Confluent Cloud is a fully managed service with enterprise capabilities—connectors, stream processing with Flink and ksqlDB, security, and governance—that accelerates development while reducing operational overhead. Companies use Confluent to power event-driven applications, analytics, and AI experiences with trusted, continuously flowing data.
+
+ElevenLabs
+ElevenLabs is the industry-leading AI voice and audio platform, enabling high-quality speech synthesis, dubbing, speech recognition, music, sound effects, and real-time conversational agents at scale. Our technology powers natural, multilingual voice experiences for media, gaming, customer experience, hospitality, healthcare, and enterprise applications worldwide.
+
+Hackathon Sponsors
+Google CloudDatadogConfluentElevenLabs
+Prizes
+$75,000 in prizes
+Datadog Challenge: First Place
+$12,500 in cash
+1 winner
+• $12,500 USD
+• Opportunity for a social media promotion
+
+Datadog Challenge: Second Place
+$7,500 in cash
+1 winner
+Datadog Challenge: Third Place
+$5,000 in cash
+1 winner
+Confluent Challenge: First Place
+$12,500 in cash
+1 winner
+• $12,500 USD
+• Opportunity for a social media promotion
+
+Confluent Challenge: Second Place
+$7,500 in cash
+1 winner
+Confluent Challenge: Third Place
+$5,000 in cash
+1 winner
+ElevenLabs Challenge: First Place
+$12,500 in cash
+1 winner
+• $12,500 USD
+• Opportunity for a social media promotion
+
+ElevenLabs Challenge: Second Place
+$7,500 in cash
+1 winner
+ElevenLabs Challenge: Third Place
+$5,000 in cash
+1 winner
+Judges
+Alessandro Lucarelli
+Alessandro Lucarelli
+Partner Solution Architect | DataDog
+
+Arnaud Simon
+Arnaud Simon
+Partner Solutions Architect | DataDog
+
+Alisha Stull
+Alisha Stull
+Partner Engineer | Google
+
+Jimit Modi
+Jimit Modi
+ISV Partner Sales Engineer | Google
+
+Sean Falconer
+Sean Falconer
+Senior Director, Product Management - AI Strategy | Confluent
+
+Dustin Shammo
+Dustin Shammo
+Sr. Solutions Engineer - Google Cloud Partnership | Confluent
+
+Jobin George
+Jobin George
+Head of Global Partner Engineering, Data Analytics - Google Cloud
+
+Maria Alejandra Emmanuelli
+Maria Alejandra Emmanuelli
+ISV Partner Engineer, EMEA | Google
+
+Louis Jordan
+Louis Jordan
+Growth Engineer | ElevenLabs
+
+Kabir Gill
+Kabir Gill
+GTM Partnerships | ElevenLabs
+
+Patrycja Wojtyś
+Patrycja Wojtyś
+Customer Engineer | Google
+
+Urvish Pandya
+Urvish Pandya
+Technical Program Manager | Google
+
+Judging Criteria
+Technological Implementation
+Does the interaction with Google Cloud and Partner services demonstrate quality software development?
+Design
+Is the user experience and design of the project well thought out?
+Potential Impact
+How big of an impact could the project have on target communities?
+Quality of the Idea
+How creative and unique is the project?

@@ -1,0 +1,110 @@
+Opening Story
+
+Look at these faces.
+They are my colleagues, my friends, my coursemates.
+On the 13th of December, 2025, I was supposed to be standing right there with them, celebrating five years of studying Petroleum Engineering.
+But while they were on that stage, I was sitting at home.
+Not because I didn't have good grades.
+Not because I lacked the skills
+I was absent for only one reason: Information Asymmetry.
+I couldn't pay my tuition fee, and the deadline passed me by.
+I had the skills to earn the money I needed. But I didn't know the opportunities existed.
+I didn't know where to find them.
+I didn't know someone like me could win $5,000 in a 4 weeks hackathon.
+I didn't know.
+But today, I'm making sure no other student ever has to say those words again.
+That's the promise behind ScholarStream.
+
+
+What is ScholarStream?
+
+ScholarStream is an AI-powered financial opportunity hub.
+It uses modern tech to discover, match, and deliver personalized scholarships, hackathons, bounties, and grants to students in urgent financial need.
+And equally helps them actually win those opportunities.
+Let me show you how.
+
+
+Intelligent Onboarding: Capturing Your Digital DNA
+
+It starts with onboarding.
+We don't just ask for a name or a GPA. We capture what I call your Academic DNA.
+Your technical stack. Your passions. Your background and Your urgency.
+Then we use Google's embedding-001 model to convert this entire profile into a 768-dimensional semantic vector.
+we're literally mapping your identity into a space where AI can find the opportunities that truly fit you.
+
+
+
+Real-Time Opportunity Discovery
+
+The moment I click "continue" here, something interesting happens behind the scenes.
+A fleet of stealth Playwright crawlers is dispatched across the web.
+they hunt specifically for opportunities that match the vector we just created for your profile.
+
+And as raw data pours in, it flows through our event-driven pipeline, and here is how it goes (the cortex pipeline):
+- the stealth playwright crawlers help discover opportunities in form of raw html.
+- we use Gemini to extract structured data from the raw HTML.
+- And we've a processor that deduplicates, filters and classify these opportunities in real time into Hackathon, Bounty, Scholarship and Grant.
+All happening within seconds.
+
+
+Personalized Data in Motion
+
+And before the data riches the dashboard.
+Our backend takes the enriched, deduplicated results and runs them through the Matching Engine.
+It scores every opportunity against your Digital DNA using our 70/30 Formula:
+70% from cosine similarity between your vector and the opportunity's vector.
+30% from hard-logic heuristic filters — location, GPA, skill keywords.
+Then it pushes the highest matches directly to your dashboard via WebSocket.
+No polling. No refreshing.
+Just personalized opportunities appearing in real time.
+You can filter by location, by platform, by type, and bookmark your favorites.
+
+
+AI Chat Assistant: What if you need urgent help and can't browse through the entire dashboard?
+
+Here's where it gets personal.
+When a student is in crisis, they don't need a search bar. They need someone who gets it.
+That's what our AI Chat Assistant does.
+Watch this: "I need $500 by Friday for my tuition fee."
+watch this, Behind the scenes, a true ReAct Agent take up your prompt
+It first run a semantic vector search, matching my query embedding against our entire opportunity database.
+If it finds some results, but they're not quite right for my skills or fits into my urgent need.
+It then dispatches a live Playwright crawler — to search the web for befitting opportunities.
+
+
+
+Now for the part I'm most proud of.
+Finding the right opportunity is half the battle. Winning it — that's what actually changes a student's life.
+
+
+Chrome Extension Co-Pilot
+
+Next is our Chrome Extension Co-Pilot, your personal application assistant.
+
+It uses a Tri-Fold Knowledge Base, which includes:
+One: your ScholarStream profile i.e skills, background, experience you filled during your onboarding Information scholartream, and if you don't want your scholars profile information to be used in your application, you can toggle it off
+
+the second one is your uploaded documents — you can upload mutliple docs and reference the specific ones you want to use in your application with @mentions. 
+
+The third KB is the specific context of the field you're filling which includes the character limit, the question intent, the platform's best practices.
+The extension even knows which platform you're on. On DevPost, it writes like a hackathon showcase. On HackerOne, it formats like a vulnerability report.
+
+Now let's see how it works. 
+When I focus on any form field, the Sparkle button appears.
+You click on it, and our co-pilot generates a personalized response for that field, respecting all the requirements.
+
+
+And if you need a change? Double-click the generated text.
+Prompt it right there.
+It rewrites everything in place.
+You never leave the form. You just win.
+
+
+Closing
+
+$2.9 billion in scholarships go unclaimed every year.
+Not because students don't deserve them. Because they don't know.
+ScholarStream changes that.
+It finds the opportunities. It matches them to you. And it helps you win.
+
+That's ScholarStream. Thank you for watching.

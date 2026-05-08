@@ -1,0 +1,28 @@
+{
+    "manifest_version": 3,
+    "name": "ScholarStream Sentinel",
+    "version": "1.0",
+    "description": "Distributed Edge Crawler for ScholarStream. Runs in background.",
+    "permissions": [
+        "tabs",
+        "notifications",
+        "alarms"
+    ],
+    "host_permissions": [
+        "http://localhost:8000/*",
+        "<all_urls>"
+    ],
+    "background": {
+        "service_worker": "background.js",
+        "type": "module"
+    },
+    "action": {
+        "default_title": "Sentinel Active",
+        "default_popup": "popup.html"
+    },
+    "icons": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+    }
+}
