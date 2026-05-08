@@ -15,10 +15,13 @@ We activated the `enable_thinking: true` parameter in the Gemma 4 chat template.
 - **Impact**: Crucial for the "Impact Track" to show that the AI isn't just generating text, but is "pondering" the financial and academic constraints of the user.
 
 ### 3. Native ReAct Loop & Agentic Match Blending
-- **Mechanism**: We implemented a manual **Reason-Act-Observe** loop in the backend.
-- **Blending Moat**: ScholarStream doesn't just "chat." It performs **Agentic Match Blending**. It takes a statistical keyword score (30%) and blends it with a Gemma 4 qualitative "Counselor Report" (70%).
-- **Outcome**: Students receive a "Counselor Report" that explains *why* they match, identifies their profile *gaps*, and provides a 3-step *action plan* to win.
-- **Verification**: Successfully tested on Nigerian scholarship queries where the model identified regional context and used the correct retrieval tools.
+- **Moat**: We synthesize a final score using a blend of statistical keyword analysis (30%) and qualitative "Thinking Mode" reasoning (70%). Gemma 4 acts as a Counselor, providing a Synthesis, Gap Analysis, and Action Plan for every top match.
+
+### 4. The Scholar Sentinel (Active Agency)
+- **Moat**: An autonomous background patrol service that scouts for opportunities every 12 hours while the student is offline, generating proactive "Sentinel Hits."
+
+### 5. The Evidence Engine (Deep RAG)
+- **Moat**: Mines user documents (PDFs, Papers) for specific achievements. The Co-pilot cites these verbatim during application drafting (e.g., *"According to your CV, you achieved X% accuracy..."*).
 
 ### 4. Infrastructure Security & Migration
 - **Project ID**: `scholarstream-gemma4good`
@@ -27,8 +30,10 @@ We activated the `enable_thinking: true` parameter in the Gemma 4 chat template.
 
 ## 🌟 Hackathon "Wow" Factors for Write-up:
 - **Zero Friction**: Judges can test the full Gemma 4 power via "Guest Mode" without a single click of a login button.
-- **SOTA Compliance**: Using the absolute latest model release (Gemma 4) as the core brain.
-- **Multimodal Ready**: Gemma 4's interleaved image/text support is "hot-wired" and ready for the next phase (PDF parsing).
+- **The Scholar Sentinel**: Persistent background agency that autonomously scouts for scholarships while the user is offline.
+- **The Evidence Engine**: Achievement-grounded RAG that mines user documents for verbatim facts to include in applications.
+- **Premium Sparkle UX**: A glassmorphism interface with human-grade typewriter effects that visualizes AI "thinking."
+- **Agentic Match Blending**: Synthesis of statistical and qualitative counselor reasoning.
 
 ---
 *Allahu Musta'an. This file serves as our memory context for the final submission.*
